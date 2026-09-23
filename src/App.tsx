@@ -976,7 +976,7 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
       />
 
       {/* Unverified Email Warning Banner */}
-      {user && (user.emailVerified === false || emailVerificationRequired) && (
+      {user && emailVerificationRequired && (
         <div className="bg-amber-950/70 border-b border-amber-500/30 px-4 py-2 flex items-center justify-between text-xs text-amber-200 z-30">
           <div className="flex items-center space-x-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />

@@ -106,7 +106,7 @@ export const CollaborationProvider: React.FC<{ children: React.ReactNode }> = ({
       if (res.success && (res as any).user) {
         const authData: any = res;
         setUser(authData.user);
-        setEmailVerificationRequired(Boolean(authData.emailVerificationRequired || (authData.user && authData.user.emailVerified === false)));
+        setEmailVerificationRequired(Boolean(authData.emailVerificationRequired));
         setRole(authData.memberRole || authData.user?.role || 'OWNER');
         setPermissions(authData.permissions || []);
 

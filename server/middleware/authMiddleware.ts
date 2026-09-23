@@ -232,9 +232,23 @@ export function requirePermission(permission: Permission) {
 }
 
 /**
+ * Helper to check whether email verification is enforced globally via feature flag.
+ * Server-side authoritative: defaults to false if not set or set to 'false'.
+ */
+export function isEmailVerificationEnabled(): boolean {
+  return process.env.ENABLE_EMAIL_VERIFICATION === 'true';
+}
+
+/**
  * Email verification guard middleware
  */
 export function requireVerifiedEmail(req: Request, res: Response, next: NextFunction): void {
+  // If email verification feature flag is disabled (default false), do not block
+  if (!isEmailVerificationEnabled()) {
+    next();
+    return;
+  }
+
   if (!req.authContext || !req.authContext.user) {
     res.status(401).json({
       success: false,

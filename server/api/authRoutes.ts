@@ -6,6 +6,7 @@ import { UserRole } from '../../src/types/collaboration';
 import { Logger } from '../utils/logger';
 import { EmailService } from '../services/email/EmailService';
 import { getAppUrl } from '../utils/url';
+import { isEmailVerificationEnabled } from '../middleware/authMiddleware';
 
 const router = Router();
 
@@ -161,7 +162,7 @@ router.post('/register', async (req: Request, res: Response) => {
       workspaceId: 'ws_primary',
       memberRole: userRole,
       permissions,
-      emailVerificationRequired: true,
+      emailVerificationRequired: isEmailVerificationEnabled(),
       emailDelivery: {
         sent: emailResult.success,
         deliveryMode: emailResult.deliveryMode
@@ -472,7 +473,7 @@ router.post('/login', (req: Request, res: Response) => {
       workspaceId: activeWsId,
       memberRole: role,
       permissions,
-      emailVerificationRequired: !user.emailVerifiedAt
+      emailVerificationRequired: isEmailVerificationEnabled() ? !user.emailVerifiedAt : false
     });
   } catch (err: any) {
     Logger.error('Login error', err);
@@ -535,7 +536,7 @@ router.get('/me', (req: Request, res: Response) => {
     workspaceId: req.authContext.workspaceId,
     memberRole: req.authContext.memberRole,
     permissions: req.authContext.permissions,
-    emailVerificationRequired: !req.authContext.user.emailVerifiedAt
+    emailVerificationRequired: isEmailVerificationEnabled() ? !req.authContext.user.emailVerifiedAt : false
   });
 });
 

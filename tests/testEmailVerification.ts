@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { CollaborationStore } from '../server/database/CollaborationStore';
+import { requireVerifiedEmail, isEmailVerificationEnabled } from '../server/middleware/authMiddleware';
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -135,6 +136,101 @@ export async function runEmailVerificationTests() {
     nonExistent === null,
     'Non existent email returned a record'
   );
+
+  // --- Feature Flag State Tests (ENABLE_EMAIL_VERIFICATION) ---
+  const originalFlag = process.env.ENABLE_EMAIL_VERIFICATION;
+
+  try {
+    // 12. Feature flag disabled (false): isEmailVerificationEnabled() returns false
+    process.env.ENABLE_EMAIL_VERIFICATION = 'false';
+    assertTest(
+      '12. Feature flag disabled: isEmailVerificationEnabled returns false when ENABLE_EMAIL_VERIFICATION=false',
+      isEmailVerificationEnabled() === false,
+      'isEmailVerificationEnabled should return false when disabled'
+    );
+
+    // 13. Feature flag disabled: unverified user is NOT blocked by requireVerifiedEmail middleware
+    const disabledState = { nextCalled: false, status: 200 };
+    const mockReqDisabled: any = {
+      authContext: {
+        user: { id: 'unverified_1', email: 'unverified@test.com', emailVerified: false }
+      }
+    };
+    const mockResDisabled: any = {
+      status(s: number) { disabledState.status = s; return mockResDisabled; },
+      json() { return mockResDisabled; }
+    };
+    requireVerifiedEmail(mockReqDisabled, mockResDisabled, () => { disabledState.nextCalled = true; });
+    assertTest(
+      '13. Feature flag disabled: unverified users can use application normally without 403 block',
+      disabledState.nextCalled === true && disabledState.status === 200,
+      `Unverified user was blocked when flag was false: status=${disabledState.status}`
+    );
+
+    // 14. Feature flag enabled (true): isEmailVerificationEnabled() returns true
+    process.env.ENABLE_EMAIL_VERIFICATION = 'true';
+    assertTest(
+      '14. Feature flag enabled: isEmailVerificationEnabled returns true when ENABLE_EMAIL_VERIFICATION=true',
+      isEmailVerificationEnabled() === true,
+      'isEmailVerificationEnabled should return true when enabled'
+    );
+
+    // 15. Feature flag enabled: unverified user is blocked with 403 EMAIL_VERIFICATION_REQUIRED
+    const enabledState = { nextCalled: false, status: 200, body: null as any };
+    const mockReqEnabled: any = {
+      authContext: {
+        user: { id: 'unverified_2', email: 'unverified2@test.com', emailVerified: false }
+      }
+    };
+    const mockResEnabled: any = {
+      status(s: number) { enabledState.status = s; return mockResEnabled; },
+      json(b: any) { enabledState.body = b; return mockResEnabled; }
+    };
+    requireVerifiedEmail(mockReqEnabled, mockResEnabled, () => { enabledState.nextCalled = true; });
+    assertTest(
+      '15. Feature flag enabled: protected routes require verified email and block unverified users with 403',
+      enabledState.nextCalled === false && enabledState.status === 403 && enabledState.body?.code === 'EMAIL_VERIFICATION_REQUIRED',
+      `Unverified user was not blocked with 403 when flag was true: status=${enabledState.status}`
+    );
+
+    // 16. Feature flag enabled: verified user passes through requireVerifiedEmail middleware
+    const verifiedState = { nextCalled: false, status: 200 };
+    const mockReqVerified: any = {
+      authContext: {
+        user: { id: 'verified_1', email: 'verified@test.com', emailVerified: true }
+      }
+    };
+    const mockResVerified: any = {
+      status(s: number) { verifiedState.status = s; return mockResVerified; },
+      json() { return mockResVerified; }
+    };
+    requireVerifiedEmail(mockReqVerified, mockResVerified, () => { verifiedState.nextCalled = true; });
+    assertTest(
+      '16. Feature flag enabled: verified users pass through protected routes successfully',
+      verifiedState.nextCalled === true && verifiedState.status === 200,
+      `Verified user was blocked: status=${verifiedState.status}`
+    );
+
+    // 17. Feature flag enabled: unauthenticated user receives 401
+    const unauthState = { nextCalled: false, status: 200 };
+    const mockReqUnauth: any = {};
+    const mockResUnauth: any = {
+      status(s: number) { unauthState.status = s; return mockResUnauth; },
+      json() { return mockResUnauth; }
+    };
+    requireVerifiedEmail(mockReqUnauth, mockResUnauth, () => { unauthState.nextCalled = true; });
+    assertTest(
+      '17. Feature flag enabled: unauthenticated requests receive 401 Authentication required',
+      unauthState.nextCalled === false && unauthState.status === 401,
+      `Unauthenticated user did not receive 401: status=${unauthState.status}`
+    );
+  } finally {
+    if (originalFlag === undefined) {
+      delete process.env.ENABLE_EMAIL_VERIFICATION;
+    } else {
+      process.env.ENABLE_EMAIL_VERIFICATION = originalFlag;
+    }
+  }
 
   return results;
 }
