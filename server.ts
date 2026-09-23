@@ -28,6 +28,7 @@ import { ConnectionManager } from './server/database/ConnectionManager';
 import { Logger } from './server/utils/logger';
 import { AuditLogger } from './server/utils/auditLogger';
 import { EmailService } from './server/services/email/EmailService';
+import { ensureDemoDatabase } from './server/database/initDemoDatabase';
 
 function validateStartupConfiguration() {
   const env = (process.env.NODE_ENV || 'development').toLowerCase();
@@ -106,6 +107,7 @@ function rateLimiter(limit: number, windowMs: number) {
 
 async function startServer() {
   validateStartupConfiguration();
+  ensureDemoDatabase();
 
   const app = express();
   const PORT = 3000;

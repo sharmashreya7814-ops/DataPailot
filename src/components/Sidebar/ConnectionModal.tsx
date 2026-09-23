@@ -236,16 +236,28 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
           </div>
 
           {dbType === 'sqlite' ? (
-          <div className="col-span-3">
-            <label className="block text-xs font-medium text-slate-300 mb-1">SQLite File Path</label>
+          <div className="col-span-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-medium text-slate-300">SQLite File Path</label>
+              <button
+                type="button"
+                onClick={() => setFilePath('data/datapilot_demo.sqlite')}
+                className="text-[11px] text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition-colors"
+              >
+                Use Built-in Demo DB
+              </button>
+            </div>
             <input
               type="text"
               required
               value={filePath}
               onChange={e => setFilePath(e.target.value)}
-              placeholder="/path/to/database.sqlite"
+              placeholder="data/datapilot_demo.sqlite"
               className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-700 rounded-md text-slate-200 focus:outline-hidden focus:border-emerald-500 font-mono"
             />
+            <p className="text-[11px] text-slate-400">
+              Enter relative path (e.g. <code className="text-slate-300">data/datapilot_demo.sqlite</code>) or absolute path to an SQLite database file.
+            </p>
           </div>
         ) : (
         <>
