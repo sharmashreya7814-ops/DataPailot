@@ -20,6 +20,18 @@ export function ensureDemoDatabase(): void {
 
   const dbFile = path.join(dataDir, 'datapilot_demo.sqlite');
   if (fs.existsSync(dbFile)) {
+    try {
+      const db = new DatabaseSync(dbFile);
+      const cols = db.prepare("PRAGMA table_info(customers)").all() as any[];
+      const hasGender = cols.some(c => c.name === 'gender');
+      if (!hasGender) {
+        db.exec("ALTER TABLE customers ADD COLUMN gender TEXT;");
+        db.exec("UPDATE customers SET gender = CASE customer_id % 3 WHEN 1 THEN 'Female' WHEN 2 THEN 'Male' ELSE 'Other' END;");
+      }
+      db.close();
+    } catch (err) {
+      Logger.warn('Could not verify/migrate demo database customers columns', { error: String(err) });
+    }
     return; // Already initialized
   }
 
@@ -32,6 +44,7 @@ export function ensureDemoDatabase(): void {
         first_name TEXT NOT NULL,
         last_name TEXT NOT NULL,
         email TEXT UNIQUE NOT NULL,
+        gender TEXT,
         city TEXT,
         country TEXT DEFAULT 'USA',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -64,14 +77,14 @@ export function ensureDemoDatabase(): void {
         FOREIGN KEY(product_id) REFERENCES products(product_id)
       );
 
-      INSERT INTO customers (first_name, last_name, email, city, country) VALUES
-        ('Alice', 'Smith', 'alice.smith@example.com', 'San Francisco', 'USA'),
-        ('Bob', 'Jones', 'bob.jones@example.com', 'New York', 'USA'),
-        ('Charlie', 'Brown', 'charlie.brown@example.com', 'London', 'UK'),
-        ('Diana', 'Prince', 'diana.prince@example.com', 'Chicago', 'USA'),
-        ('Evan', 'Wright', 'evan.wright@example.com', 'Toronto', 'Canada'),
-        ('Fiona', 'Gallagher', 'fiona.g@example.com', 'Chicago', 'USA'),
-        ('George', 'Clark', 'george.c@example.com', 'Austin', 'USA');
+      INSERT INTO customers (first_name, last_name, email, gender, city, country) VALUES
+        ('Alice', 'Smith', 'alice.smith@example.com', 'Female', 'San Francisco', 'USA'),
+        ('Bob', 'Jones', 'bob.jones@example.com', 'Male', 'New York', 'USA'),
+        ('Charlie', 'Brown', 'charlie.brown@example.com', 'Other', 'London', 'UK'),
+        ('Diana', 'Prince', 'diana.prince@example.com', 'Female', 'Chicago', 'USA'),
+        ('Evan', 'Wright', 'evan.wright@example.com', 'Male', 'Toronto', 'Canada'),
+        ('Fiona', 'Gallagher', 'fiona.g@example.com', 'Other', 'Chicago', 'USA'),
+        ('George', 'Clark', 'george.c@example.com', 'Female', 'Austin', 'USA');
 
       INSERT INTO products (name, category, price, stock_quantity) VALUES
         ('UltraBook Pro 15', 'Electronics', 1299.99, 45),

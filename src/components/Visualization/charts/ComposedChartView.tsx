@@ -1,7 +1,9 @@
 import React from 'react';
 import {
   ResponsiveContainer,
-  AreaChart,
+  ComposedChart,
+  Bar,
+  Line,
   Area,
   XAxis,
   YAxis,
@@ -12,20 +14,23 @@ import {
 import { ChartConfig } from '../../../types/visualization';
 import { ProcessedDataPoint, VisualizationDataProcessor } from '../../../services/visualizationDataProcessor';
 
-interface AreaChartViewProps {
+interface ComposedChartViewProps {
   data: ProcessedDataPoint[];
   config: ChartConfig;
 }
 
 const PALETTE = [
-  { stroke: '#6366f1', fillStart: '#6366f1', id: 'gradIndigo' },
-  { stroke: '#10b981', fillStart: '#10b981', id: 'gradEmerald' },
-  { stroke: '#06b6d4', fillStart: '#06b6d4', id: 'gradCyan' }
+  '#6366f1', // Indigo
+  '#10b981', // Emerald
+  '#f59e0b', // Amber
+  '#ec4899', // Pink
+  '#06b6d4', // Cyan
+  '#8b5cf6'  // Violet
 ];
 
-export const AreaChartView: React.FC<AreaChartViewProps> = ({ data, config }) => {
-  const isStacked = config.chartType === 'stacked_area';
-  const measures = [config.yAxis, ...(config.secondaryMeasures || [])];
+export const ComposedChartView: React.FC<ComposedChartViewProps> = ({ data, config }) => {
+  const primaryMeasure = config.yAxis;
+  const secondaryMeasures = config.secondaryMeasures || [];
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -52,18 +57,9 @@ export const AreaChartView: React.FC<AreaChartViewProps> = ({ data, config }) =>
   };
 
   return (
-    <div id="area-chart-stage" className="w-full h-full min-h-[220px]">
+    <div id="composed-chart-stage" className="w-full h-full min-h-[220px]">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: config.xAxisLabel ? 45 : 35 }}>
-          <defs>
-            {PALETTE.map(p => (
-              <linearGradient key={p.id} id={p.id} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={p.fillStart} stopOpacity={0.4} />
-                <stop offset="95%" stopColor={p.fillStart} stopOpacity={0.0} />
-              </linearGradient>
-            ))}
-          </defs>
-
+        <ComposedChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: config.xAxisLabel ? 45 : 35 }}>
           {config.showGrid && (
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.6} />
           )}
@@ -87,23 +83,45 @@ export const AreaChartView: React.FC<AreaChartViewProps> = ({ data, config }) =>
           {config.showTooltip !== false && <Tooltip content={<CustomTooltip />} />}
           {config.showLegend && <Legend wrapperStyle={{ paddingTop: 10, fontSize: 12 }} />}
 
-          {measures.map((mKey, idx) => {
-            const p = PALETTE[idx % PALETTE.length];
+          {/* Primary measure as Bar */}
+          {primaryMeasure && (
+            <Bar
+              dataKey={primaryMeasure}
+              name={primaryMeasure.replace(/_/g, ' ')}
+              fill={PALETTE[0]}
+              radius={[4, 4, 0, 0]}
+            />
+          )}
+
+          {/* Secondary measures alternate Line and Area */}
+          {secondaryMeasures.map((mKey, idx) => {
+            const color = PALETTE[(idx + 1) % PALETTE.length];
+            if (idx === 0) {
+              return (
+                <Line
+                  key={mKey}
+                  type="monotone"
+                  dataKey={mKey}
+                  name={mKey.replace(/_/g, ' ')}
+                  stroke={color}
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: color }}
+                />
+              );
+            }
             return (
               <Area
                 key={mKey}
                 type="monotone"
                 dataKey={mKey}
                 name={mKey.replace(/_/g, ' ')}
-                stroke={p.stroke}
-                strokeWidth={2.5}
-                stackId={isStacked ? 'stack' : undefined}
-                fillOpacity={1}
-                fill={`url(#${p.id})`}
+                fill={color}
+                stroke={color}
+                fillOpacity={0.2}
               />
             );
           })}
-        </AreaChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );

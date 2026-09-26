@@ -55,11 +55,11 @@ export const ScatterPlotView: React.FC<ScatterPlotViewProps> = ({ data, config }
           {pt.label && <div className="font-semibold text-slate-200 mb-1">{pt.label}</div>}
           <div className="flex items-center space-x-2 text-slate-300">
             <span className="text-slate-400">{config.xAxis}:</span>
-            <span className="font-mono font-medium text-white">{VisualizationDataProcessor.formatNumber(pt.x)}</span>
+            <span className="font-mono font-medium text-white">{VisualizationDataProcessor.formatNumber(pt.x, config)}</span>
           </div>
           <div className="flex items-center space-x-2 text-slate-300 mt-0.5">
             <span className="text-slate-400">{config.yAxis}:</span>
-            <span className="font-mono font-medium text-indigo-400">{VisualizationDataProcessor.formatNumber(pt.y)}</span>
+            <span className="font-mono font-medium text-indigo-400">{VisualizationDataProcessor.formatNumber(pt.y, config)}</span>
           </div>
         </div>
       );
@@ -68,9 +68,9 @@ export const ScatterPlotView: React.FC<ScatterPlotViewProps> = ({ data, config }
   };
 
   return (
-    <div id="scatter-plot-stage" className="w-full h-full min-h-[350px]">
+    <div id="scatter-plot-stage" className="w-full h-full min-h-[220px]">
       <ResponsiveContainer width="100%" height="100%">
-        <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+        <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: config.xAxisLabel ? 45 : 35 }}>
           {config.showGrid && (
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.6} />
           )}
@@ -81,8 +81,8 @@ export const ScatterPlotView: React.FC<ScatterPlotViewProps> = ({ data, config }
             name={config.xAxis}
             stroke="#64748b"
             tick={{ fill: '#94a3b8', fontSize: 11 }}
-            tickFormatter={val => VisualizationDataProcessor.formatNumber(val)}
-            label={config.xAxisLabel ? { value: config.xAxisLabel, position: 'bottom', fill: '#64748b', fontSize: 11 } : undefined}
+            tickFormatter={val => VisualizationDataProcessor.formatNumber(val, config)}
+            label={config.xAxisLabel ? { value: config.xAxisLabel, position: 'bottom', fill: '#94a3b8', fontSize: 11, offset: 15 } : undefined}
           />
           <YAxis
             type="number"
@@ -90,11 +90,11 @@ export const ScatterPlotView: React.FC<ScatterPlotViewProps> = ({ data, config }
             name={config.yAxis}
             stroke="#64748b"
             tick={{ fill: '#94a3b8', fontSize: 11 }}
-            tickFormatter={val => VisualizationDataProcessor.formatNumber(val)}
-            label={config.yAxisLabel ? { value: config.yAxisLabel, angle: -90, position: 'left', fill: '#64748b', fontSize: 11 } : undefined}
+            tickFormatter={val => VisualizationDataProcessor.formatNumber(val, config)}
+            label={config.yAxisLabel ? { value: config.yAxisLabel, angle: -90, position: 'left', fill: '#94a3b8', fontSize: 11, offset: 10 } : undefined}
           />
 
-          <Tooltip content={<CustomTooltip />} />
+          {config.showTooltip !== false && <Tooltip content={<CustomTooltip />} />}
           {config.showLegend && groupKey && (
             <Legend wrapperStyle={{ paddingTop: 10, fontSize: 12 }} />
           )}

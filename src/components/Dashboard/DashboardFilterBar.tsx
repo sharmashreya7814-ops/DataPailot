@@ -7,9 +7,11 @@ import {
   Layers,
   ChevronDown,
   RotateCcw,
-  Check
+  Check,
+  Loader2
 } from 'lucide-react';
 import { DashboardFilter } from '../../types/dashboard';
+import { DatabaseApiClient } from '../../services/databaseApi';
 
 interface DashboardFilterBarProps {
   filters: DashboardFilter[];
@@ -34,22 +36,100 @@ export const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
   const [newLabel, setNewLabel] = useState('');
   const [newTargetCol, setNewTargetCol] = useState('');
   const [newType, setNewType] = useState<DashboardFilter['type']>('text');
+  const [newTargetTable, setNewTargetTable] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingFilterIds, setLoadingFilterIds] = useState<Set<string>>(new Set());
+  const [filterOptionsMap, setFilterOptionsMap] = useState<Record<string, string[]>>({});
 
-  const handleCreateFilter = (e: React.FormEvent) => {
+  // Auto-fetch distinct values for single_select filters that lack options
+  React.useEffect(() => {
+    filters.forEach(filter => {
+      if (filter.type === 'single_select' && (!filter.options || filter.options.length === 0)) {
+        if (!filterOptionsMap[filter.id] && !loadingFilterIds.has(filter.id)) {
+          setLoadingFilterIds(prev => new Set(prev).add(filter.id));
+
+          let col = filter.targetColumn.trim();
+          let tbl = filter.targetTable?.trim();
+          if (col.includes('.')) {
+            const parts = col.split('.');
+            if (parts.length === 2) {
+              if (!tbl) tbl = parts[0];
+              col = parts[1];
+            } else if (parts.length >= 3) {
+              if (!tbl) tbl = parts[parts.length - 2];
+              col = parts[parts.length - 1];
+            }
+          }
+
+          DatabaseApiClient.getFilterValues(col, tbl)
+            .then(res => {
+              if (res.values && res.values.length > 0) {
+                const unique = Array.from(new Set(res.values.filter(v => v !== null && v !== undefined && String(v).trim() !== '')));
+                setFilterOptionsMap(prev => ({ ...prev, [filter.id]: unique }));
+              }
+            })
+            .catch(err => {
+              console.warn('Failed to dynamically fetch filter values for', filter.targetColumn, err);
+            })
+            .finally(() => {
+              setLoadingFilterIds(prev => {
+                const next = new Set(prev);
+                next.delete(filter.id);
+                return next;
+              });
+            });
+        }
+      }
+    });
+  }, [filters, filterOptionsMap, loadingFilterIds]);
+
+  const handleCreateFilter = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLabel.trim() || !newTargetCol.trim()) return;
+
+    setIsSubmitting(true);
+    let options: string[] | undefined = undefined;
+
+    let targetCol = newTargetCol.trim();
+    let targetTbl = newTargetTable.trim() || undefined;
+
+    if (targetCol.includes('.')) {
+      const parts = targetCol.split('.');
+      if (parts.length === 2) {
+        if (!targetTbl) targetTbl = parts[0];
+        targetCol = parts[1];
+      } else if (parts.length >= 3) {
+        if (!targetTbl) targetTbl = parts[parts.length - 2];
+        targetCol = parts[parts.length - 1];
+      }
+    }
+
+    if (newType === 'single_select') {
+      try {
+        const res = await DatabaseApiClient.getFilterValues(targetCol, targetTbl);
+        if (res.values && res.values.length > 0) {
+          options = Array.from(new Set(res.values.filter(v => v !== null && v !== undefined && String(v).trim() !== '')));
+        }
+      } catch (err) {
+        console.warn('Could not pre-fetch distinct values during filter creation:', err);
+      }
+    }
 
     const created: DashboardFilter = {
       id: `filter-${Date.now()}`,
       label: newLabel.trim(),
       type: newType,
       targetColumn: newTargetCol.trim(),
-      currentValue: newType === 'single_select' ? 'ALL' : ''
+      targetTable: targetTbl,
+      currentValue: newType === 'single_select' ? 'ALL' : '',
+      options
     };
 
     onAddFilter(created);
     setNewLabel('');
     setNewTargetCol('');
+    setNewTargetTable('');
+    setIsSubmitting(false);
     setIsAddModalOpen(false);
   };
 
@@ -129,18 +209,26 @@ export const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
             )}
 
             {filter.type === 'single_select' && (
-              <select
-                value={filter.currentValue || 'ALL'}
-                onChange={e => onUpdateFilter(filter.id, e.target.value)}
-                className="bg-slate-900 border border-slate-700/60 rounded px-2 py-0.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
-              >
-                <option value="ALL">All</option>
-                {filter.options?.map(opt => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center space-x-1">
+                <select
+                  value={filter.currentValue || 'ALL'}
+                  onChange={e => onUpdateFilter(filter.id, e.target.value)}
+                  className="bg-slate-900 border border-slate-700/60 rounded px-2 py-0.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="ALL">All</option>
+                  {(filter.options && filter.options.length > 0
+                    ? filter.options
+                    : filterOptionsMap[filter.id] || []
+                  ).map(opt => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+                {loadingFilterIds.has(filter.id) && (
+                  <Loader2 className="w-3 h-3 text-emerald-400 animate-spin" />
+                )}
+              </div>
             )}
 
             <button
@@ -240,7 +328,7 @@ export const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
               </label>
               <input
                 type="text"
-                placeholder="e.g. region or created_at"
+                placeholder="e.g. gender, city, or status"
                 value={newTargetCol}
                 onChange={e => setNewTargetCol(e.target.value)}
                 required
@@ -248,6 +336,22 @@ export const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
               />
               <p className="text-[10px] text-slate-400 mt-1">
                 Must match a column name returned by the widget queries.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                Target Table (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. customers or orders (optional)"
+                value={newTargetTable}
+                onChange={e => setNewTargetTable(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                Specify table if column is shared across multiple tables.
               </p>
             </div>
 
@@ -278,9 +382,11 @@ export const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-3.5 py-1 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg"
+                disabled={isSubmitting}
+                className="px-3.5 py-1 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg disabled:opacity-50 flex items-center space-x-1.5"
               >
-                Add Filter
+                {isSubmitting && <Loader2 className="w-3 h-3 animate-spin" />}
+                <span>{isSubmitting ? 'Loading Values...' : 'Add Filter'}</span>
               </button>
             </div>
           </form>

@@ -120,6 +120,22 @@ export class VisualizationDataProcessor {
       return point;
     });
 
+    // 1b. Percent Bar 100% normalization
+    if (config.chartType === 'percent_bar') {
+      const allMeasures = [yKey, ...secondaryKeys];
+      data = data.map(pt => {
+        const total = allMeasures.reduce((sum, m) => sum + (typeof pt[m] === 'number' ? (pt[m] as number) : 0), 0);
+        const normalized = { ...pt };
+        if (total > 0) {
+          for (const m of allMeasures) {
+            const raw = typeof pt[m] === 'number' ? (pt[m] as number) : 0;
+            normalized[m] = Math.round((raw / total) * 1000) / 10; // e.g. 45.2%
+          }
+        }
+        return normalized;
+      });
+    }
+
     // 2. Filter out null points if not treating as 0 and chart requires continuous measure
     if (!config.treatNullAsZero && config.chartType !== 'table') {
       data = data.filter(d => d[yKey] !== null);
@@ -313,19 +329,59 @@ export class VisualizationDataProcessor {
     return isNaN(num) ? null : num;
   }
 
-  public static formatNumber(val: number | null): string {
+  public static formatNumber(val: number | null, config?: Partial<ChartConfig>): string {
     if (val === null || val === undefined || isNaN(val)) return '—';
 
-    // Format currency or large numbers
-    if (Math.abs(val) >= 1_000_000) {
-      return `${(val / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 2 })}M`;
-    }
-    if (Math.abs(val) >= 1_000) {
-      return `${(val / 1_000).toLocaleString(undefined, { maximumFractionDigits: 2 })}k`;
+    const precision = config?.decimalPrecision !== undefined ? config.decimalPrecision : 2;
+    const format = config?.numberFormat || 'standard';
+    const currency = config?.currencySymbol || '$';
+
+    if (format === 'percent') {
+      const pctVal = Math.abs(val) <= 1 ? val * 100 : val;
+      return `${pctVal.toLocaleString(undefined, {
+        minimumFractionDigits: precision,
+        maximumFractionDigits: precision
+      })}%`;
     }
 
-    return Number.isInteger(val)
+    if (format === 'currency') {
+      if (Math.abs(val) >= 1_000_000_000) {
+        return `${currency}${(val / 1_000_000_000).toLocaleString(undefined, { maximumFractionDigits: precision })}B`;
+      }
+      if (Math.abs(val) >= 1_000_000) {
+        return `${currency}${(val / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: precision })}M`;
+      }
+      if (Math.abs(val) >= 1_000) {
+        return `${currency}${(val / 1_000).toLocaleString(undefined, { maximumFractionDigits: precision })}k`;
+      }
+      return `${currency}${val.toLocaleString(undefined, {
+        minimumFractionDigits: precision,
+        maximumFractionDigits: precision
+      })}`;
+    }
+
+    if (format === 'compact') {
+      if (Math.abs(val) >= 1_000_000_000) {
+        return `${(val / 1_000_000_000).toLocaleString(undefined, { maximumFractionDigits: precision })}B`;
+      }
+      if (Math.abs(val) >= 1_000_000) {
+        return `${(val / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: precision })}M`;
+      }
+      if (Math.abs(val) >= 1_000) {
+        return `${(val / 1_000).toLocaleString(undefined, { maximumFractionDigits: precision })}k`;
+      }
+    }
+
+    // Default standard formatting
+    if (Math.abs(val) >= 1_000_000) {
+      return `${(val / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: precision })}M`;
+    }
+    if (Math.abs(val) >= 1_000) {
+      return `${(val / 1_000).toLocaleString(undefined, { maximumFractionDigits: precision })}k`;
+    }
+
+    return Number.isInteger(val) && precision === 0
       ? val.toLocaleString()
-      : val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      : val.toLocaleString(undefined, { minimumFractionDigits: precision, maximumFractionDigits: precision });
   }
 }

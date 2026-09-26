@@ -34,6 +34,8 @@ export const BarChartView: React.FC<BarChartViewProps> = ({
   config,
   isHorizontal = false
 }) => {
+  const isStacked = config.chartType === 'stacked_bar' || config.chartType === 'percent_bar';
+  const isPercent = config.chartType === 'percent_bar';
   const measures = [config.yAxis, ...(config.secondaryMeasures || [])];
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -50,7 +52,7 @@ export const BarChartView: React.FC<BarChartViewProps> = ({
                 <span>{entry.name}:</span>
               </span>
               <span className="font-mono font-medium text-slate-100">
-                {VisualizationDataProcessor.formatNumber(entry.value)}
+                {isPercent ? `${entry.value}%` : VisualizationDataProcessor.formatNumber(entry.value, config)}
               </span>
             </div>
           ))}
@@ -61,12 +63,12 @@ export const BarChartView: React.FC<BarChartViewProps> = ({
   };
 
   return (
-    <div id="bar-chart-stage" className="w-full h-full min-h-[350px]">
+    <div id="bar-chart-stage" className="w-full h-full min-h-[220px]">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
           layout={isHorizontal ? 'vertical' : 'horizontal'}
-          margin={{ top: 20, right: 30, left: 20, bottom: 40 }}
+          margin={{ top: 20, right: 30, left: 20, bottom: config.xAxisLabel ? 45 : 35 }}
         >
           {config.showGrid && (
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.6} />
@@ -76,9 +78,11 @@ export const BarChartView: React.FC<BarChartViewProps> = ({
             <>
               <XAxis
                 type="number"
+                domain={isPercent ? [0, 100] : ['auto', 'auto']}
                 stroke="#64748b"
                 tick={{ fill: '#94a3b8', fontSize: 11 }}
-                tickFormatter={val => VisualizationDataProcessor.formatNumber(val)}
+                tickFormatter={val => isPercent ? `${val}%` : VisualizationDataProcessor.formatNumber(val, config)}
+                label={config.xAxisLabel ? { value: config.xAxisLabel, position: 'bottom', fill: '#94a3b8', fontSize: 11, offset: 5 } : undefined}
               />
               <YAxis
                 type="category"
@@ -86,6 +90,7 @@ export const BarChartView: React.FC<BarChartViewProps> = ({
                 stroke="#64748b"
                 tick={{ fill: '#94a3b8', fontSize: 11 }}
                 width={120}
+                label={config.yAxisLabel ? { value: config.yAxisLabel, angle: -90, position: 'left', fill: '#94a3b8', fontSize: 11 } : undefined}
               />
             </>
           ) : (
@@ -98,17 +103,20 @@ export const BarChartView: React.FC<BarChartViewProps> = ({
                 angle={-25}
                 textAnchor="end"
                 height={50}
+                label={config.xAxisLabel ? { value: config.xAxisLabel, position: 'bottom', fill: '#94a3b8', fontSize: 11, offset: 15 } : undefined}
               />
               <YAxis
                 type="number"
+                domain={isPercent ? [0, 100] : ['auto', 'auto']}
                 stroke="#64748b"
                 tick={{ fill: '#94a3b8', fontSize: 11 }}
-                tickFormatter={val => VisualizationDataProcessor.formatNumber(val)}
+                tickFormatter={val => isPercent ? `${val}%` : VisualizationDataProcessor.formatNumber(val, config)}
+                label={config.yAxisLabel ? { value: config.yAxisLabel, angle: -90, position: 'left', fill: '#94a3b8', fontSize: 11, offset: 10 } : undefined}
               />
             </>
           )}
 
-          <Tooltip content={<CustomTooltip />} />
+          {config.showTooltip !== false && <Tooltip content={<CustomTooltip />} />}
           {config.showLegend && <Legend wrapperStyle={{ paddingTop: 10, fontSize: 12 }} />}
 
           {measures.map((mKey, idx) => {
@@ -119,16 +127,19 @@ export const BarChartView: React.FC<BarChartViewProps> = ({
                 dataKey={mKey}
                 name={mKey.replace(/_/g, ' ')}
                 fill={color}
-                radius={isHorizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]}
+                stackId={isStacked ? 'a' : undefined}
+                radius={isStacked ? [0, 0, 0, 0] : isHorizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]}
               >
                 {config.showDataLabels && (
                   <LabelList
                     dataKey={mKey}
-                    position={isHorizontal ? 'right' : 'top'}
+                    position={isHorizontal ? (isStacked ? 'inside' : 'right') : (isStacked ? 'inside' : 'top')}
                     formatter={(val: any) =>
-                      typeof val === 'number' ? VisualizationDataProcessor.formatNumber(val) : ''
+                      typeof val === 'number'
+                        ? isPercent ? `${val}%` : VisualizationDataProcessor.formatNumber(val, config)
+                        : ''
                     }
-                    fill="#94a3b8"
+                    fill={isStacked ? '#ffffff' : '#94a3b8'}
                     fontSize={10}
                   />
                 )}

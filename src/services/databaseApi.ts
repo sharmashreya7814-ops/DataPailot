@@ -317,4 +317,28 @@ export class DatabaseApiClient {
     const data = await this.handleResponse<{ result: any }>(res);
     return data.result;
   }
+
+  public static async getFilterValues(
+    column: string,
+    table?: string,
+    schema?: string
+  ): Promise<{ values: string[]; column: string; table: string | null }> {
+    const params = new URLSearchParams({ column });
+    if (table) params.append('table', table);
+    if (schema) params.append('schema', schema);
+    const res = await fetch(`/api/database/filter-values?${params.toString()}`, {
+      headers: this.getHeaders()
+    });
+    const data = await this.handleResponse<{
+      success: boolean;
+      values: string[];
+      column: string;
+      table: string | null;
+    }>(res);
+    return {
+      values: data.values || [],
+      column: data.column,
+      table: data.table
+    };
+  }
 }

@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+import { DatabaseSync } from 'node:sqlite';
 import { Router, Request, Response } from 'express';
 import { ConnectionManager } from '../database/ConnectionManager';
 import { UnifiedDataLayer } from '../import/UnifiedDataLayer';
@@ -207,5 +210,210 @@ schemaRoutes.get('/relationships', async (req: Request, res: Response) => {
   } catch (err: any) {
     Logger.error('Failed to discover relationships', err);
     ApiResponse.error(res, 500, 'RELATIONSHIP_DISCOVERY_FAILED', err.message || 'Failed to discover relationships');
+  }
+});
+
+/**
+ * GET /api/database/filter-values
+ * Retrieves distinct, non-null values for a target database column across connected adapter or imported datasets.
+ * Respects SQL dialect identifier quoting and read-only protections.
+ */
+schemaRoutes.get('/filter-values', async (req: Request, res: Response) => {
+  const sessionId = getSessionId(req, res);
+  const storeKey = getSessionDatasetStoreKey(req, res);
+  let parsedColumn = (typeof req.query.column === 'string' ? req.query.column : '').trim();
+  let parsedTable = (typeof req.query.table === 'string' ? req.query.table : '').trim();
+  let parsedSchema = (typeof req.query.schema === 'string' ? req.query.schema : '').trim();
+
+  if (!parsedColumn) {
+    ApiResponse.error(res, 400, 'MISSING_COLUMN', 'Target database column is required.');
+    return;
+  }
+
+  // Support qualified identifiers like "customers.gender" or "public.customers.gender"
+  if (parsedColumn.includes('.')) {
+    const parts = parsedColumn.split('.');
+    if (parts.length === 2) {
+      if (!parsedTable) parsedTable = parts[0];
+      parsedColumn = parts[1];
+    } else if (parts.length === 3) {
+      if (!parsedSchema) parsedSchema = parts[0];
+      if (!parsedTable) parsedTable = parts[1];
+      parsedColumn = parts[2];
+    }
+  }
+
+  const colVal = ApiValidation.validateIdentifier(parsedColumn, 'Column');
+  if (!colVal.isValid) {
+    ApiResponse.error(res, 400, 'INVALID_IDENTIFIER', colVal.error || 'Invalid column name.');
+    return;
+  }
+
+  const adapter = connectionManager.getAdapter(sessionId);
+  const importedDatasets = unifiedDataLayer.getDatasets(storeKey);
+
+  const queryImported = async (tableName: string, colName: string): Promise<string[] | null> => {
+    const ds = unifiedDataLayer.findDataset(storeKey, tableName);
+    if (!ds) return null;
+    const colExists = ds.columns.some(c => c.name.toLowerCase() === colName.toLowerCase());
+    if (!colExists) return null;
+    const cleanSql = `SELECT DISTINCT "${colName.replace(/"/g, '""')}" AS "val" FROM "${ds.tableName.replace(/"/g, '""')}" WHERE "${colName.replace(/"/g, '""')}" IS NOT NULL ORDER BY "val" LIMIT 1000`;
+    const qRes = await unifiedDataLayer.executeQuery(storeKey, cleanSql, { maxRows: 1000 });
+    return qRes.rows
+      .map(r => r['val'])
+      .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
+      .map(v => String(v));
+  };
+
+  const queryDemoDb = (tableName: string | undefined, colName: string): { values: string[]; table: string } | null => {
+    try {
+      const demoPath = path.join(process.cwd(), 'data', 'datapilot_demo.sqlite');
+      if (!fs.existsSync(demoPath)) return null;
+      const db = new DatabaseSync(demoPath);
+      try {
+        let matchedTable = tableName;
+        if (!matchedTable) {
+          const userTables = db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as any[];
+          for (const tbl of userTables) {
+            const cols = db.prepare(`PRAGMA table_info("${tbl.name.replace(/"/g, '""')}")`).all() as any[];
+            if (cols.some((c: any) => c.name.toLowerCase() === colName.toLowerCase())) {
+              matchedTable = tbl.name;
+              break;
+            }
+          }
+        } else {
+          const cols = db.prepare(`PRAGMA table_info("${matchedTable.replace(/"/g, '""')}")`).all() as any[];
+          const hasCol = cols.some((c: any) => c.name.toLowerCase() === colName.toLowerCase());
+          if (!hasCol) return null;
+        }
+
+        if (!matchedTable) return null;
+
+        const safeTable = matchedTable.replace(/"/g, '""');
+        const safeCol = colName.replace(/"/g, '""');
+        const stmt = db.prepare(`SELECT DISTINCT "${safeCol}" AS val FROM "${safeTable}" WHERE "${safeCol}" IS NOT NULL ORDER BY val LIMIT 1000`);
+        const rows = stmt.all() as any[];
+        const values = Array.from(new Set(
+          rows
+            .map((r: any) => r.val)
+            .filter((v: any) => v !== null && v !== undefined && String(v).trim() !== '')
+            .map((v: any) => String(v))
+        ));
+        return { values, table: matchedTable };
+      } finally {
+        db.close();
+      }
+    } catch {
+      return null;
+    }
+  };
+
+  try {
+    if (parsedTable) {
+      const tblVal = ApiValidation.validateIdentifier(parsedTable, 'Table');
+      if (!tblVal.isValid) {
+        ApiResponse.error(res, 400, 'INVALID_IDENTIFIER', tblVal.error || 'Invalid table name.');
+        return;
+      }
+
+      if (parsedSchema === 'imported') {
+        const importedVals = await queryImported(tblVal.cleanName!, colVal.cleanName!);
+        if (importedVals !== null) {
+          const uniqueVals = Array.from(new Set(importedVals));
+          res.json({ success: true, values: uniqueVals, column: colVal.cleanName, table: tblVal.cleanName });
+          return;
+        }
+      }
+
+      if (adapter && adapter.isConnected()) {
+        try {
+          const targetSchema = parsedSchema || (adapter.getDatabaseType() === 'PostgreSQL' ? 'public' : 'main');
+          const details = await adapter.getTableDetails(targetSchema, tblVal.cleanName!);
+          const matchedCol = details.columns.find(c => c.name.toLowerCase() === colVal.cleanName!.toLowerCase());
+          if (matchedCol) {
+            const dialect = adapter.getDialect();
+            const quotedCol = dialect.quoteIdentifier(matchedCol.name);
+            const qualifiedTable = dialect.qualifyTable(details.schema, details.name);
+            const distinctSql = `SELECT DISTINCT ${quotedCol} AS "val" FROM ${qualifiedTable} WHERE ${quotedCol} IS NOT NULL ORDER BY "val" LIMIT 1000;`;
+
+            const qRes = await adapter.executeReadOnlyQuery(distinctSql, { maxRows: 1000 });
+            const values = Array.from(new Set(
+              qRes.rows
+                .map(r => r['val'])
+                .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
+                .map(v => String(v))
+            ));
+
+            res.json({ success: true, values, column: matchedCol.name, table: details.name });
+            return;
+          }
+        } catch {
+          // Continue to imported datasets / demo database if not found in adapter
+        }
+      }
+
+      const importedVals = await queryImported(tblVal.cleanName!, colVal.cleanName!);
+      if (importedVals !== null) {
+        const uniqueVals = Array.from(new Set(importedVals));
+        res.json({ success: true, values: uniqueVals, column: colVal.cleanName, table: tblVal.cleanName });
+        return;
+      }
+
+      const demoResult = queryDemoDb(tblVal.cleanName!, colVal.cleanName!);
+      if (demoResult !== null) {
+        res.json({ success: true, values: demoResult.values, column: colVal.cleanName, table: demoResult.table });
+        return;
+      }
+
+      ApiResponse.error(res, 404, 'COLUMN_NOT_FOUND', `Column "${colVal.cleanName}" not found in table "${tblVal.cleanName}".`);
+      return;
+    }
+
+    if (adapter && adapter.isConnected()) {
+      const tables = await adapter.getTables(parsedSchema || undefined);
+      for (const t of tables) {
+        try {
+          const details = await adapter.getTableDetails(t.schema, t.name);
+          const matchedCol = details.columns.find(c => c.name.toLowerCase() === colVal.cleanName!.toLowerCase());
+          if (matchedCol) {
+            const dialect = adapter.getDialect();
+            const quotedCol = dialect.quoteIdentifier(matchedCol.name);
+            const qualifiedTable = dialect.qualifyTable(t.schema, t.name);
+            const distinctSql = `SELECT DISTINCT ${quotedCol} AS "val" FROM ${qualifiedTable} WHERE ${quotedCol} IS NOT NULL ORDER BY "val" LIMIT 1000;`;
+            const qRes = await adapter.executeReadOnlyQuery(distinctSql, { maxRows: 1000 });
+            const values = Array.from(new Set(
+              qRes.rows
+                .map(r => r['val'])
+                .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
+                .map(v => String(v))
+            ));
+            res.json({ success: true, values, column: matchedCol.name, table: t.name });
+            return;
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+
+    for (const ds of importedDatasets) {
+      const importedVals = await queryImported(ds.tableName, colVal.cleanName!);
+      if (importedVals !== null && importedVals.length > 0) {
+        const uniqueVals = Array.from(new Set(importedVals));
+        res.json({ success: true, values: uniqueVals, column: colVal.cleanName, table: ds.tableName });
+        return;
+      }
+    }
+
+    const demoAny = queryDemoDb(undefined, colVal.cleanName!);
+    if (demoAny !== null) {
+      res.json({ success: true, values: demoAny.values, column: colVal.cleanName, table: demoAny.table });
+      return;
+    }
+
+    res.json({ success: true, values: [], column: colVal.cleanName, table: null });
+  } catch (err: any) {
+    Logger.error('Failed to retrieve distinct filter values', err, { sessionId, column: columnParam });
+    ApiResponse.error(res, 500, 'FILTER_VALUES_FAILED', err.message || 'Failed to retrieve filter values');
   }
 });

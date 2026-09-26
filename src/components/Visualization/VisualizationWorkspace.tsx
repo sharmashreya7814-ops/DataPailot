@@ -58,6 +58,11 @@ import { PieDonutView } from './charts/PieDonutView';
 import { ScatterPlotView } from './charts/ScatterPlotView';
 import { HistogramView } from './charts/HistogramView';
 import { TableView } from './charts/TableView';
+import { ComposedChartView } from './charts/ComposedChartView';
+import { RadarChartView } from './charts/RadarChartView';
+import { RadialBarChartView } from './charts/RadialBarChartView';
+import { FunnelChartView } from './charts/FunnelChartView';
+import { TreemapView } from './charts/TreemapView';
 
 export interface VisualizationWorkspaceProps {
   queryResult: QueryResult | null;
@@ -1283,13 +1288,13 @@ export const VisualizationWorkspace: React.FC<VisualizationWorkspaceProps> = ({
                   </div>
                 ) : config.chartType === 'kpi' ? (
                   <KpiCardView rows={effectiveQueryResult.rows} config={config} />
-                ) : config.chartType === 'bar' ? (
+                ) : config.chartType === 'bar' || config.chartType === 'grouped_bar' || config.chartType === 'stacked_bar' || config.chartType === 'percent_bar' ? (
                   <BarChartView data={processedData} config={config} isHorizontal={false} />
                 ) : config.chartType === 'horizontal_bar' ? (
                   <BarChartView data={processedData} config={config} isHorizontal={true} />
                 ) : config.chartType === 'line' ? (
                   <LineChartView data={processedData} config={config} />
-                ) : config.chartType === 'area' ? (
+                ) : config.chartType === 'area' || config.chartType === 'stacked_area' ? (
                   <AreaChartView data={processedData} config={config} />
                 ) : config.chartType === 'pie' ? (
                   <PieDonutView data={processedData} config={config} isDonut={false} />
@@ -1299,6 +1304,16 @@ export const VisualizationWorkspace: React.FC<VisualizationWorkspaceProps> = ({
                   <ScatterPlotView data={processedData} config={config} />
                 ) : config.chartType === 'histogram' ? (
                   <HistogramView rows={effectiveQueryResult.rows} config={config} />
+                ) : config.chartType === 'composed' ? (
+                  <ComposedChartView data={processedData} config={config} />
+                ) : config.chartType === 'radar' ? (
+                  <RadarChartView data={processedData} config={config} />
+                ) : config.chartType === 'radial_bar' ? (
+                  <RadialBarChartView data={processedData} config={config} />
+                ) : config.chartType === 'funnel' ? (
+                  <FunnelChartView data={processedData} config={config} />
+                ) : config.chartType === 'treemap' ? (
+                  <TreemapView data={processedData} config={config} />
                 ) : (
                   <TableView columns={effectiveQueryResult.columns} rows={effectiveQueryResult.rows} />
                 )}

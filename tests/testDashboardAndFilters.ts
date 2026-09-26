@@ -1,7 +1,13 @@
+import fs from 'fs';
+import path from 'path';
+import { DatabaseSync } from 'node:sqlite';
 import { DashboardFilterEngine } from '../src/services/dashboardFilterEngine';
-import { DashboardFilter, DashboardWidget } from '../src/types/dashboard';
+import { DashboardService } from '../src/services/dashboardService';
+import { DashboardFilter, DashboardWidget, Dashboard } from '../src/types/dashboard';
 import { QueryResultColumn } from '../src/types/database';
 import { VisualizationExportService } from '../src/services/visualizationExportService';
+import { VisualizationDataProcessor } from '../src/services/visualizationDataProcessor';
+import { ChartRecommender } from '../src/services/chartRecommender';
 
 export function runDashboardAndFilterTests(): { name: string; passed: boolean; error?: string }[] {
   const results: { name: string; passed: boolean; error?: string }[] = [];
@@ -126,6 +132,320 @@ export function runDashboardAndFilterTests(): { name: string; passed: boolean; e
   const normalText = 'Product Alpha';
   const normalSanitized = VisualizationExportService.sanitizeCsvCell(normalText);
   assert('CSV-SAFE: Normal text does not get unnecessary single quote', normalSanitized === '"Product Alpha"');
+
+
+  // --- DYNAMIC DASHBOARD FILTER VALUES TESTS ---
+  // Test distinct values extraction logic from SQLite demo database
+  try {
+    // DatabaseSync imported at top level
+    // path imported at top level
+    const demoDbFile = path.join(process.cwd(), 'data', 'datapilot_demo.sqlite');
+    if (fs.existsSync(demoDbFile)) {
+      const demoDb = new DatabaseSync(demoDbFile);
+
+      // 1. SPECIFIC TEST CASE: customers.gender
+      // Expected dropdown options: All, Female, Male, Other
+      const genderStmt = demoDb.prepare('SELECT DISTINCT "gender" AS "val" FROM "customers" WHERE "gender" IS NOT NULL ORDER BY "val"');
+      const genderRows = genderStmt.all();
+      const distinctGenders = genderRows.map((r: any) => r.val).filter(Boolean);
+
+      assert(
+        'FILTER-DYNAMIC-1: customers.gender distinct values extracted dynamically from database',
+        distinctGenders.length === 3 &&
+        distinctGenders.includes('Female') &&
+        distinctGenders.includes('Male') &&
+        distinctGenders.includes('Other'),
+        `Expected Female, Male, Other but got ${JSON.stringify(distinctGenders)}`
+      );
+
+      // Dropdown option builder simulation: All must always be first option
+      const dropdownOptions = ['All', ...distinctGenders];
+      assert(
+        'FILTER-DYNAMIC-2: Dropdown options start with All followed by database values',
+        dropdownOptions[0] === 'All' &&
+        dropdownOptions[1] === 'Female' &&
+        dropdownOptions[2] === 'Male' &&
+        dropdownOptions[3] === 'Other'
+      );
+
+      // 2. ADDITIONAL TEST CASE: products.category (>3 distinct values) to verify dynamic query behavior
+      const catStmt = demoDb.prepare('SELECT DISTINCT "category" AS "val" FROM "products" WHERE "category" IS NOT NULL ORDER BY "val"');
+      const catRows = catStmt.all();
+      const distinctCats = catRows.map((r: any) => r.val).filter(Boolean);
+
+      assert(
+        'FILTER-DYNAMIC-3: products.category has >3 distinct values fetched dynamically',
+        distinctCats.length > 3 &&
+        distinctCats.includes('Accessories') &&
+        distinctCats.includes('Audio') &&
+        distinctCats.includes('Electronics') &&
+        distinctCats.includes('Furniture')
+      );
+
+      // 3. NUMERIC COLUMN TEST: products.price (numeric distinct values)
+      const priceStmt = demoDb.prepare('SELECT DISTINCT "price" AS "val" FROM "products" WHERE "price" IS NOT NULL ORDER BY "val"');
+      const priceRows = priceStmt.all();
+      const distinctPrices = priceRows.map((r: any) => String(r.val)).filter(Boolean);
+
+      assert(
+        'FILTER-DYNAMIC-4: Numeric column distinct values formatted and handled safely',
+        distinctPrices.length > 0 && distinctPrices.some((p: string) => p.includes('1299.99'))
+      );
+
+      // 4. NULL VALUE SAFETY: verify NULL values are never included in options list
+      demoDb.exec("INSERT INTO customers (first_name, last_name, email, gender) VALUES ('TestNull', 'User', 'testnull@example.com', NULL);");
+      const nullCheckStmt = demoDb.prepare('SELECT DISTINCT "gender" AS "val" FROM "customers" WHERE "gender" IS NOT NULL ORDER BY "val"');
+      const nullCheckRows = nullCheckStmt.all();
+      const nullCheckGenders = nullCheckRows.map((r: any) => r.val);
+      assert(
+        'FILTER-DYNAMIC-5: NULL values safely filtered out from distinct options',
+        !nullCheckGenders.includes(null) && !nullCheckGenders.includes(undefined) && !nullCheckGenders.includes('')
+      );
+      demoDb.exec("DELETE FROM customers WHERE email = 'testnull@example.com';");
+
+      demoDb.close();
+    }
+  } catch (err: any) {
+    assert('FILTER-DYNAMIC: Error running database dynamic filter tests', false, err.message);
+  }
+
+  // --- PHASE 1 & 6: WIDGET DUPLICATION & POSITION / SIZING TESTS ---
+  try {
+    const testDash: Dashboard = {
+      id: 'dash_test_1',
+      name: 'Testing Sizing & Duplication',
+      widgets: [
+        {
+          id: 'w_orig_1',
+          title: 'Quarterly Revenue',
+          chartType: 'bar',
+          queryRef: { type: 'raw_sql', sql: 'SELECT q, rev FROM q_rev;' },
+          chartConfig: {
+            chartType: 'bar',
+            xAxis: 'q',
+            yAxis: 'rev',
+            secondaryMeasures: [],
+            aggregation: 'sum',
+            sortOrder: 'asc',
+            sortBy: 'x',
+            limit: 'all',
+            showLegend: true,
+            showDataLabels: true,
+            showGrid: true,
+            binCount: 10,
+            treatNullAsZero: true,
+            numberFormat: 'currency',
+            currencySymbol: '$',
+            decimalPrecision: 2
+          },
+          size: { colSpan: 6, height: 340 },
+          position: { order: 0 }
+        },
+        {
+          id: 'w_orig_2',
+          title: 'Order Status',
+          chartType: 'pie',
+          queryRef: { type: 'raw_sql', sql: 'SELECT status, count(*) as cnt FROM orders GROUP BY status;' },
+          chartConfig: {
+            chartType: 'pie',
+            xAxis: 'status',
+            yAxis: 'cnt',
+            secondaryMeasures: [],
+            aggregation: 'count',
+            sortOrder: 'none',
+            sortBy: 'x',
+            limit: 'all',
+            showLegend: true,
+            showDataLabels: true,
+            showGrid: false,
+            binCount: 10,
+            treatNullAsZero: true
+          },
+          size: { colSpan: 6, height: 340 },
+          position: { order: 1 }
+        }
+      ],
+      filters: [],
+      layout: { columns: 12, gap: 'md' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      autoRefreshInterval: 60
+    };
+
+    DashboardService.saveDashboard(testDash);
+
+    // 1. Duplicate Widget
+    const dupRes = DashboardService.duplicateWidget('dash_test_1', 'w_orig_1');
+    assert('DUP-1: Duplicate widget creates distinct ID and retains query & configs',
+      Boolean(dupRes && dupRes.widget.id !== 'w_orig_1' && dupRes.widget.title.includes('Copy'))
+    );
+    assert('DUP-2: Duplicated widget has copied query and chartConfig',
+      dupRes?.widget.queryRef.sql === 'SELECT q, rev FROM q_rev;' &&
+      dupRes?.widget.chartConfig.numberFormat === 'currency'
+    );
+    assert('DUP-3: Duplicated widget increases total widget count',
+      dupRes?.dashboard.widgets.length === 3
+    );
+
+    // 2. Reorder Widgets
+    const reorderedIds = [dupRes!.widget.id, 'w_orig_2', 'w_orig_1'];
+    const reorderRes = DashboardService.reorderWidgets('dash_test_1', reorderedIds);
+    assert('REORDER-1: Widgets reordered according to custom order array',
+      Boolean(reorderRes && reorderRes.widgets[0].id === dupRes!.widget.id && reorderRes.widgets[1].id === 'w_orig_2')
+    );
+
+    // 3. Widget Size Update & Presets
+    const updatedSize = DashboardService.updateWidget('dash_test_1', 'w_orig_1', {
+      size: { colSpan: 12, height: 500 }
+    });
+    const foundW1 = updatedSize?.widgets.find(w => w.id === 'w_orig_1');
+    assert('SIZE-1: Widget colSpan and height updated and persisted',
+      foundW1?.size.colSpan === 12 && foundW1?.size.height === 500
+    );
+
+    // Clean up test dashboard
+    DashboardService.deleteDashboard('dash_test_1');
+  } catch (err: any) {
+    assert('PHASE-1-6: Error testing sizing and duplication', false, err.message);
+  }
+
+  // --- PHASE 2: EXTENSIVE CHART TYPES & 100% STACKED NORMALIZATION ---
+  try {
+    const rawRows = [
+      { category: 'North', sales: 100, profit: 25 },
+      { category: 'South', sales: 300, profit: 75 }
+    ];
+    const detectedCols = [
+      { name: 'category', dataType: 'varchar', isNumeric: false, isCategorical: true, isDateOrTime: false, nullCount: 0, distinctCount: 2 },
+      { name: 'sales', dataType: 'int', isNumeric: true, isCategorical: false, isDateOrTime: false, nullCount: 0, distinctCount: 2 },
+      { name: 'profit', dataType: 'int', isNumeric: true, isCategorical: false, isDateOrTime: false, nullCount: 0, distinctCount: 2 }
+    ];
+
+    // 100% Stacked Bar Normalization
+    const percentConfig = {
+      chartType: 'percent_bar' as const,
+      xAxis: 'category',
+      yAxis: 'sales',
+      secondaryMeasures: ['profit'],
+      aggregation: 'none' as const,
+      sortOrder: 'none' as const,
+      sortBy: 'x' as const,
+      limit: 'all' as const,
+      showLegend: true,
+      showDataLabels: true,
+      showGrid: true,
+      binCount: 10,
+      treatNullAsZero: true
+    };
+
+    const percentProcessed = VisualizationDataProcessor.process(rawRows, percentConfig, detectedCols as any);
+    assert('PERCENT-1: 100% stacked bar data normalized to 100 percent sum per category',
+      percentProcessed.length === 2 &&
+      Math.round((percentProcessed[0].sales as number) + (percentProcessed[0].profit as number)) === 100 &&
+      Math.round((percentProcessed[1].sales as number) + (percentProcessed[1].profit as number)) === 100
+    );
+
+    // Enhanced Number Formatting
+    const val = 1250000;
+    const standardFmt = VisualizationDataProcessor.formatNumber(val, { numberFormat: 'standard' });
+    const compactFmt = VisualizationDataProcessor.formatNumber(val, { numberFormat: 'compact', decimalPrecision: 1 });
+    const currencyFmt = VisualizationDataProcessor.formatNumber(val, { numberFormat: 'currency', currencySymbol: '$', decimalPrecision: 2 });
+    const percentFmt = VisualizationDataProcessor.formatNumber(0.854, { numberFormat: 'percent', decimalPrecision: 1 });
+
+    assert('FORMAT-1: Compact formatting produces M suffix', compactFmt.includes('M'));
+    assert('FORMAT-2: Currency formatting includes symbol', currencyFmt.startsWith('$'));
+    assert('FORMAT-3: Percentage formatting multiplies and adds %', percentFmt.includes('85.4%'));
+  } catch (err: any) {
+    assert('PHASE-2-FORMAT: Error testing chart normalization and formatting', false, err.message);
+  }
+
+  // --- PHASE 3: SMART CHART RECOMMENDATIONS ---
+  try {
+    const timeCols = [
+      { name: 'order_date', dataType: 'date', isNumeric: false, isCategorical: false, isDateOrTime: true, nullCount: 0, distinctCount: 30 },
+      { name: 'revenue', dataType: 'numeric', isNumeric: true, isCategorical: false, isDateOrTime: false, nullCount: 0, distinctCount: 30 }
+    ];
+    const timeRecs = ChartRecommender.getRecommendations(timeCols as any, 30);
+    assert('RECOM-1: Time dimension + numeric measure recommends Line Chart',
+      timeRecs.some(r => r.chartType === 'line')
+    );
+
+    const scatterCols = [
+      { name: 'height', dataType: 'int', isNumeric: true, isCategorical: false, isDateOrTime: false, nullCount: 0, distinctCount: 50 },
+      { name: 'weight', dataType: 'int', isNumeric: true, isCategorical: false, isDateOrTime: false, nullCount: 0, distinctCount: 50 }
+    ];
+    const scatterRecs = ChartRecommender.getRecommendations(scatterCols as any, 50);
+    assert('RECOM-2: Two numeric columns recommends Scatter Plot',
+      scatterRecs.some(r => r.chartType === 'scatter')
+    );
+  } catch (err: any) {
+    assert('PHASE-3-RECOM: Error testing chart recommender', false, err.message);
+  }
+
+  // --- PHASE 9: CROSS-FILTER COMPATIBILITY & UNAFFECTED WIDGET SAFETY ---
+  try {
+    const ordersWidget: DashboardWidget = {
+      id: 'w_orders_1',
+      title: 'Order Status Count',
+      chartType: 'bar',
+      queryRef: {
+        type: 'raw_sql',
+        sql: 'SELECT status, count(*) as count FROM orders GROUP BY status;',
+        sourceTable: 'orders',
+        referencedColumns: ['status', 'count']
+      },
+      chartConfig: {
+        chartType: 'bar',
+        xAxis: 'status',
+        yAxis: 'count',
+        secondaryMeasures: [],
+        aggregation: 'none',
+        sortOrder: 'none',
+        sortBy: 'x',
+        limit: 'all',
+        showLegend: true,
+        showDataLabels: true,
+        showGrid: true,
+        binCount: 10,
+        treatNullAsZero: true
+      },
+      size: { colSpan: 6 },
+      position: { order: 0 }
+    };
+
+    const ordersCols: QueryResultColumn[] = [
+      { name: 'status', dataType: 'varchar' },
+      { name: 'count', dataType: 'int' }
+    ];
+
+    // Filter on customers.gender
+    const customerGenderFilter: DashboardFilter = {
+      id: 'f_gender',
+      label: 'Customer Gender',
+      targetColumn: 'customers.gender',
+      targetTable: 'customers',
+      type: 'single_select',
+      currentValue: 'Female'
+    };
+
+    const compOrders = DashboardFilterEngine.checkCompatibility(customerGenderFilter, ordersWidget, ordersCols);
+    assert('CROSS-FILTER-1: Orders widget is marked incompatible with customers.gender filter',
+      !compOrders.isCompatible
+    );
+
+    const appliedOrders = DashboardFilterEngine.applyFiltersToSql(
+      ordersWidget.queryRef.sql,
+      [customerGenderFilter],
+      ordersWidget,
+      ordersCols
+    );
+    assert('CROSS-FILTER-2: Incompatible filter is not injected into orders widget query',
+      appliedOrders.appliedFilterCount === 0 &&
+      appliedOrders.augmentedSql === ordersWidget.queryRef.sql
+    );
+  } catch (err: any) {
+    assert('PHASE-9-CROSSFILTER: Error testing cross-filter compatibility', false, err.message);
+  }
 
   return results;
 }

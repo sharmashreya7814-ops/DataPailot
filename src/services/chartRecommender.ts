@@ -8,155 +8,237 @@ import {
 
 export class ChartRecommender {
   /**
-   * Intelligently selects the best default visualization based on result metadata
+   * Returns prioritized list of recommended charts for the dataset
    */
-  public static recommend(
+  public static getRecommendations(
     columns: DetectedColumn[],
     rowCount: number
-  ): ChartRecommendation {
+  ): ChartRecommendation[] {
+    const list: ChartRecommendation[] = [];
     if (columns.length === 0 || rowCount === 0) {
-      return {
+      return [{
         chartType: 'table',
         confidence: 'low',
         reason: 'No columns or records available for visualization.'
-      };
+      }];
     }
 
     const numericCols = columns.filter(c => c.isNumeric);
     const dateCols = columns.filter(c => c.isDateOrTime);
     const categoricalCols = columns.filter(c => c.isCategorical && !c.isDateOrTime);
 
-    // Rule 1: Single numeric result (1 row, 1 numeric column or 2 columns with current/previous) -> KPI Card
-    if (rowCount === 1 && numericCols.length >= 1) {
-      const primaryMetric = numericCols[0].name;
-      return {
+    // 1. KPI Card
+    if (rowCount <= 2 && numericCols.length >= 1) {
+      list.push({
         chartType: 'kpi',
         confidence: 'high',
-        reason: 'Single numeric aggregation detected, ideal for high-impact metric presentation.',
-        yAxis: primaryMetric,
-        title: primaryMetric.replace(/_/g, ' ').toUpperCase()
-      };
-    }
-
-    // Rule 1b: 1-2 rows with metric columns (like current vs previous) -> KPI Card
-    if (rowCount <= 2 && numericCols.length === 1 && columns.length <= 2) {
-      return {
-        chartType: 'kpi',
-        confidence: 'high',
-        reason: 'Summary metric detected, recommended as KPI Card.',
+        reason: 'Single numeric summary detected, ideal for high-impact metric presentation.',
         yAxis: numericCols[0].name,
         title: numericCols[0].name.replace(/_/g, ' ').toUpperCase()
-      };
+      });
     }
 
-    // Rule 2: Date + multiple numeric measures -> Multi-series Line Chart
-    if (dateCols.length >= 1 && numericCols.length > 1) {
+    // 2. Date / Temporal Trends
+    if (dateCols.length >= 1 && numericCols.length >= 1) {
       const dateCol = dateCols[0].name;
       const primaryMeasure = numericCols[0].name;
       const secondaryMeasures = numericCols.slice(1).map(c => c.name);
-      return {
+
+      list.push({
         chartType: 'line',
         confidence: 'high',
-        reason: `Temporal trend detected on ${dateCol} with multiple numeric metrics. Multi-series Line Chart recommended.`,
+        reason: `Chronological series (${dateCol}) mapped to measure (${primaryMeasure}). Line Chart recommended.`,
         xAxis: dateCol,
         yAxis: primaryMeasure,
         secondaryMeasures,
         title: `${primaryMeasure.replace(/_/g, ' ')} over time`
-      };
-    }
+      });
 
-    // Rule 3: Date + single numeric measure -> Line Chart
-    if (dateCols.length >= 1 && numericCols.length === 1) {
-      const dateCol = dateCols[0].name;
-      const metricCol = numericCols[0].name;
-      return {
-        chartType: 'line',
+      list.push({
+        chartType: 'area',
         confidence: 'high',
-        reason: `Chronological series (${dateCol}) mapped to measure (${metricCol}). Line Chart recommended.`,
+        reason: `Cumulative temporal trend across ${dateCol}. Area Chart provides volume context.`,
         xAxis: dateCol,
-        yAxis: metricCol,
-        title: `${metricCol.replace(/_/g, ' ')} over ${dateCol.replace(/_/g, ' ')}`
-      };
+        yAxis: primaryMeasure,
+        secondaryMeasures,
+        title: `${primaryMeasure.replace(/_/g, ' ')} volume trend`
+      });
+
+      if (numericCols.length > 1) {
+        list.push({
+          chartType: 'stacked_area',
+          confidence: 'medium',
+          reason: 'Multiple metrics over time. Stacked Area shows composite volume.',
+          xAxis: dateCol,
+          yAxis: primaryMeasure,
+          secondaryMeasures,
+          title: `Combined volume over time`
+        });
+      }
     }
 
-    // Rule 4: Category + percentage / small categorical proportions -> Donut or Bar
+    // 3. Categorical + Numeric Measures
     if (categoricalCols.length >= 1 && numericCols.length >= 1) {
       const catCol = categoricalCols[0];
       const metricCol = numericCols[0];
 
-      // Check if percentage or small category count (<= 6 distinct values)
-      const isPercentage =
-        metricCol.name.toLowerCase().includes('percent') ||
-        metricCol.name.toLowerCase().includes('share') ||
-        metricCol.name.toLowerCase().includes('pct') ||
-        metricCol.name.toLowerCase().includes('ratio');
-
-      if (catCol.distinctCount <= 6 && (isPercentage || rowCount <= 6)) {
-        return {
-          chartType: 'donut',
+      // Many categories (> 8) -> Horizontal Bar
+      if (catCol.distinctCount > 8 || rowCount > 8) {
+        list.push({
+          chartType: 'horizontal_bar',
           confidence: 'high',
-          reason: `Categorical proportion (${catCol.name}) with ${catCol.distinctCount} categories. Donut Chart recommended.`,
+          reason: `High category cardinality (${catCol.distinctCount} items). Horizontal Bar ensures readability.`,
           xAxis: catCol.name,
           yAxis: metricCol.name,
-          title: `Share of ${metricCol.name.replace(/_/g, ' ')} by ${catCol.name.replace(/_/g, ' ')}`
-        };
+          title: `${metricCol.name.replace(/_/g, ' ')} by ${catCol.name.replace(/_/g, ' ')}`
+        });
       }
 
-      // If multiple numeric measures with category -> Multi-metric Bar
-      if (numericCols.length > 1) {
-        return {
-          chartType: 'bar',
-          confidence: 'high',
-          reason: `Categorical grouping (${catCol.name}) with multiple numeric metrics. Multi-series Bar Chart recommended.`,
-          xAxis: catCol.name,
-          yAxis: metricCol.name,
-          secondaryMeasures: numericCols.slice(1).map(c => c.name),
-          title: `Metrics by ${catCol.name.replace(/_/g, ' ')}`
-        };
-      }
-
-      // Standard Category + numeric -> Bar Chart
-      return {
+      // Standard Bar
+      list.push({
         chartType: 'bar',
         confidence: 'high',
         reason: `Categorical dimension (${catCol.name}) with numeric measure (${metricCol.name}). Bar Chart recommended.`,
         xAxis: catCol.name,
         yAxis: metricCol.name,
         title: `${metricCol.name.replace(/_/g, ' ')} by ${catCol.name.replace(/_/g, ' ')}`
-      };
+      });
+
+      // Part-to-whole (Pie / Donut)
+      if (catCol.distinctCount <= 7 && catCol.distinctCount >= 2) {
+        list.push({
+          chartType: 'donut',
+          confidence: 'high',
+          reason: `Part-to-whole distribution with ${catCol.distinctCount} categories. Donut Chart recommended.`,
+          xAxis: catCol.name,
+          yAxis: metricCol.name,
+          title: `Share of ${metricCol.name.replace(/_/g, ' ')} by ${catCol.name.replace(/_/g, ' ')}`
+        });
+        list.push({
+          chartType: 'pie',
+          confidence: 'medium',
+          reason: `Categorical share with ${catCol.distinctCount} categories.`,
+          xAxis: catCol.name,
+          yAxis: metricCol.name,
+          title: `${metricCol.name.replace(/_/g, ' ')} breakdown`
+        });
+      }
+
+      // Multiple measures -> Grouped Bar & Stacked Bar & Composed
+      if (numericCols.length > 1) {
+        const secondary = numericCols.slice(1).map(c => c.name);
+        list.push({
+          chartType: 'grouped_bar',
+          confidence: 'high',
+          reason: `Multiple measures across ${catCol.name}. Grouped Bar compares metrics side-by-side.`,
+          xAxis: catCol.name,
+          yAxis: metricCol.name,
+          secondaryMeasures: secondary,
+          title: `Comparison by ${catCol.name.replace(/_/g, ' ')}`
+        });
+        list.push({
+          chartType: 'stacked_bar',
+          confidence: 'high',
+          reason: `Composition across categories. Stacked Bar shows aggregate totals.`,
+          xAxis: catCol.name,
+          yAxis: metricCol.name,
+          secondaryMeasures: secondary,
+          title: `Total Composition by ${catCol.name.replace(/_/g, ' ')}`
+        });
+        list.push({
+          chartType: 'percent_bar',
+          confidence: 'medium',
+          reason: `Relative share across categories. 100% Stacked Bar normalizes proportions.`,
+          xAxis: catCol.name,
+          yAxis: metricCol.name,
+          secondaryMeasures: secondary,
+          title: `100% Proportions by ${catCol.name.replace(/_/g, ' ')}`
+        });
+        list.push({
+          chartType: 'composed',
+          confidence: 'medium',
+          reason: 'Combines Bar and Line to showcase primary measure alongside secondary trends.',
+          xAxis: catCol.name,
+          yAxis: metricCol.name,
+          secondaryMeasures: secondary,
+          title: `Multi-metric Overview by ${catCol.name.replace(/_/g, ' ')}`
+        });
+      }
+
+      // Treemap for category sizes
+      if (catCol.distinctCount >= 3) {
+        list.push({
+          chartType: 'treemap',
+          confidence: 'medium',
+          reason: `Hierarchical / nested category breakdown. Treemap visualizes relative sizes.`,
+          xAxis: catCol.name,
+          yAxis: metricCol.name,
+          title: `${catCol.name.replace(/_/g, ' ')} Breakdown`
+        });
+      }
+
+      // Funnel if sequential or status-like
+      const isFunnelCandidate =
+        catCol.name.toLowerCase().includes('stage') ||
+        catCol.name.toLowerCase().includes('status') ||
+        catCol.name.toLowerCase().includes('step') ||
+        catCol.name.toLowerCase().includes('funnel');
+      if (isFunnelCandidate) {
+        list.push({
+          chartType: 'funnel',
+          confidence: 'high',
+          reason: `Sequential process dimension (${catCol.name}). Funnel Chart illustrates conversion drops.`,
+          xAxis: catCol.name,
+          yAxis: metricCol.name,
+          title: `Conversion Funnel: ${catCol.name.replace(/_/g, ' ')}`
+        });
+      }
     }
 
-    // Rule 5: Exactly two numeric columns (no dates, no categories) -> Scatter Plot
-    if (numericCols.length >= 2 && categoricalCols.length === 0 && dateCols.length === 0) {
-      return {
+    // 4. Two Numeric Columns -> Scatter Plot
+    if (numericCols.length >= 2) {
+      list.push({
         chartType: 'scatter',
         confidence: 'high',
-        reason: `Two continuous numeric variables (${numericCols[0].name} vs ${numericCols[1].name}). Scatter Plot recommended to examine correlation.`,
+        reason: `Correlation between ${numericCols[0].name} and ${numericCols[1].name}. Scatter Plot recommended.`,
         xAxis: numericCols[0].name,
         yAxis: numericCols[1].name,
         title: `${numericCols[1].name.replace(/_/g, ' ')} vs ${numericCols[0].name.replace(/_/g, ' ')}`
-      };
+      });
     }
 
-    // Rule 6: Single numeric column with multiple records -> Histogram
-    if (numericCols.length === 1 && categoricalCols.length === 0 && rowCount > 5) {
-      return {
+    // 5. Distribution of Single Numeric Column -> Histogram
+    if (numericCols.length >= 1 && rowCount > 5) {
+      list.push({
         chartType: 'histogram',
         confidence: 'medium',
-        reason: `Single continuous numeric distribution (${numericCols[0].name}). Histogram recommended.`,
+        reason: `Continuous distribution analysis on ${numericCols[0].name}. Histogram recommended.`,
         xAxis: numericCols[0].name,
         yAxis: numericCols[0].name,
         title: `Distribution of ${numericCols[0].name.replace(/_/g, ' ')}`
-      };
+      });
     }
 
-    // Fallback: Table
-    return {
+    // 6. Table fallback
+    list.push({
       chartType: 'table',
       confidence: 'medium',
       reason: 'Standard tabular layout provides clearest representation for this dataset.',
       title: 'Query Data View'
-    };
+    });
+
+    return list;
+  }
+
+  /**
+   * Intelligently selects the best default visualization based on result metadata
+   */
+  public static recommend(
+    columns: DetectedColumn[],
+    rowCount: number
+  ): ChartRecommendation {
+    const list = this.getRecommendations(columns, rowCount);
+    return list[0];
   }
 
   /**
@@ -177,10 +259,10 @@ export class ChartRecommender {
     const xCol = config.xAxis ? colMap.get(config.xAxis) : undefined;
     const yCol = config.yAxis ? colMap.get(config.yAxis) : undefined;
 
-    const isCount = config.aggregation === 'count';
+    const isCount = config.aggregation === 'count' || config.aggregation === 'count_distinct';
     const isAllRows = config.yAxis === 'All Rows' || config.yAxis === '*';
     const isSum = config.aggregation === 'sum';
-    const isAvg = config.aggregation === 'avg';
+    const isAvg = config.aggregation === 'avg' || config.aggregation === 'median';
     const isMin = config.aggregation === 'min';
     const isMax = config.aggregation === 'max';
 
@@ -250,7 +332,7 @@ export class ChartRecommender {
       return { isValid: errors.length === 0, errors, warnings };
     }
 
-    // Standard Charts (Bar, Horizontal Bar, Line, Area, Pie, Donut)
+    // Standard Charts & Analytical Charts (Bar, Grouped, Stacked, Line, Area, Pie, Donut, Funnel, Treemap, Radar, Radial)
     if (!xCol) {
       errors.push('Please select a dimension or category for the X-axis.');
     }
@@ -298,6 +380,13 @@ export class ChartRecommender {
         warnings.push(
           `Pie charts work best with a small number of categories (selected '${xCol.name}' has ${xCol.distinctCount} distinct values). Consider a Bar Chart for clearer readability.`
         );
+      }
+    }
+
+    // Treemap checks
+    if (config.chartType === 'treemap') {
+      if (yCol && !yCol.isNumeric) {
+        errors.push(`Treemap requires a numeric measure for rectangle sizing.`);
       }
     }
 

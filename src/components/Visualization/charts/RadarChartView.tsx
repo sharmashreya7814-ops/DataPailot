@@ -1,30 +1,32 @@
 import React from 'react';
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
   Tooltip,
   Legend
 } from 'recharts';
 import { ChartConfig } from '../../../types/visualization';
 import { ProcessedDataPoint, VisualizationDataProcessor } from '../../../services/visualizationDataProcessor';
 
-interface AreaChartViewProps {
+interface RadarChartViewProps {
   data: ProcessedDataPoint[];
   config: ChartConfig;
 }
 
 const PALETTE = [
-  { stroke: '#6366f1', fillStart: '#6366f1', id: 'gradIndigo' },
-  { stroke: '#10b981', fillStart: '#10b981', id: 'gradEmerald' },
-  { stroke: '#06b6d4', fillStart: '#06b6d4', id: 'gradCyan' }
+  '#6366f1', // Indigo
+  '#10b981', // Emerald
+  '#f59e0b', // Amber
+  '#ec4899', // Pink
+  '#06b6d4', // Cyan
+  '#8b5cf6'  // Violet
 ];
 
-export const AreaChartView: React.FC<AreaChartViewProps> = ({ data, config }) => {
-  const isStacked = config.chartType === 'stacked_area';
+export const RadarChartView: React.FC<RadarChartViewProps> = ({ data, config }) => {
   const measures = [config.yAxis, ...(config.secondaryMeasures || [])];
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -52,58 +54,38 @@ export const AreaChartView: React.FC<AreaChartViewProps> = ({ data, config }) =>
   };
 
   return (
-    <div id="area-chart-stage" className="w-full h-full min-h-[220px]">
+    <div id="radar-chart-stage" className="w-full h-full min-h-[220px]">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: config.xAxisLabel ? 45 : 35 }}>
-          <defs>
-            {PALETTE.map(p => (
-              <linearGradient key={p.id} id={p.id} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={p.fillStart} stopOpacity={0.4} />
-                <stop offset="95%" stopColor={p.fillStart} stopOpacity={0.0} />
-              </linearGradient>
-            ))}
-          </defs>
-
-          {config.showGrid && (
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.6} />
-          )}
-
-          <XAxis
+        <RadarChart cx="50%" cy="50%" outerRadius="75%" data={data}>
+          {config.showGrid && <PolarGrid stroke="#334155" />}
+          <PolarAngleAxis
             dataKey="xLabel"
-            stroke="#64748b"
             tick={{ fill: '#94a3b8', fontSize: 11 }}
-            angle={-25}
-            textAnchor="end"
-            height={50}
-            label={config.xAxisLabel ? { value: config.xAxisLabel, position: 'bottom', fill: '#94a3b8', fontSize: 11, offset: 15 } : undefined}
           />
-          <YAxis
-            stroke="#64748b"
-            tick={{ fill: '#94a3b8', fontSize: 11 }}
+          <PolarRadiusAxis
+            angle={30}
+            stroke="#475569"
+            tick={{ fill: '#64748b', fontSize: 10 }}
             tickFormatter={val => VisualizationDataProcessor.formatNumber(val, config)}
-            label={config.yAxisLabel ? { value: config.yAxisLabel, angle: -90, position: 'left', fill: '#94a3b8', fontSize: 11, offset: 10 } : undefined}
           />
 
           {config.showTooltip !== false && <Tooltip content={<CustomTooltip />} />}
           {config.showLegend && <Legend wrapperStyle={{ paddingTop: 10, fontSize: 12 }} />}
 
           {measures.map((mKey, idx) => {
-            const p = PALETTE[idx % PALETTE.length];
+            const color = PALETTE[idx % PALETTE.length];
             return (
-              <Area
+              <Radar
                 key={mKey}
-                type="monotone"
-                dataKey={mKey}
                 name={mKey.replace(/_/g, ' ')}
-                stroke={p.stroke}
-                strokeWidth={2.5}
-                stackId={isStacked ? 'stack' : undefined}
-                fillOpacity={1}
-                fill={`url(#${p.id})`}
+                dataKey={mKey}
+                stroke={color}
+                fill={color}
+                fillOpacity={0.4}
               />
             );
           })}
-        </AreaChart>
+        </RadarChart>
       </ResponsiveContainer>
     </div>
   );

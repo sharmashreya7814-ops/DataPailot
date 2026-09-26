@@ -61,7 +61,7 @@ export const PieDonutView: React.FC<PieDonutViewProps> = ({
           <div className="flex items-center space-x-2 text-slate-300">
             <span>Value:</span>
             <span className="font-mono font-medium text-white">
-              {VisualizationDataProcessor.formatNumber(val)}
+              {VisualizationDataProcessor.formatNumber(val, config)}
             </span>
           </div>
           <div className="flex items-center space-x-2 text-slate-400 mt-0.5">
@@ -75,20 +75,20 @@ export const PieDonutView: React.FC<PieDonutViewProps> = ({
   };
 
   return (
-    <div id="pie-chart-stage" className="w-full h-full min-h-[350px] flex flex-col items-center">
+    <div id="pie-chart-stage" className="w-full h-full min-h-[220px] flex flex-col items-center">
       {hasTooManySlices && (
-        <div className="w-full max-w-lg mb-2 flex items-center space-x-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+        <div className="w-full max-w-lg mb-2 flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px]">
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
           <span>
-            Pie charts work best with a small number of categories. ({pieData.length} categories shown). Consider using a Bar Chart.
+            Pie charts work best with a small number of categories ({pieData.length} shown). Consider a Bar Chart.
           </span>
         </div>
       )}
 
-      <div className="w-full flex-1 min-h-[300px]">
+      <div className="w-full flex-1 min-h-[180px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Tooltip content={<CustomTooltip />} />
+            {config.showTooltip !== false && <Tooltip content={<CustomTooltip />} />}
             {config.showLegend && (
               <Legend
                 layout="horizontal"

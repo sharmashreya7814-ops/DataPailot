@@ -38,11 +38,12 @@ import {
 import { DiscoveredTable, QueryResult } from '../../types/database';
 import { DashboardService } from '../../services/dashboardService';
 import { DashboardRefreshService } from '../../services/dashboardRefreshService';
+import { DashboardFilterEngine } from '../../services/dashboardFilterEngine';
 import { DashboardExportService } from '../../services/dashboardExportService';
 import { DatabaseApiClient } from '../../services/databaseApi';
 
 import { DashboardList } from './DashboardList';
-import { DashboardWidgetCard } from './DashboardWidgetCard';
+import { DashboardWidgetCard, FilterCompatibilityInfo } from './DashboardWidgetCard';
 import { DashboardFilterBar } from './DashboardFilterBar';
 import { DashboardTemplatesModal } from './DashboardTemplatesModal';
 import { DashboardAiBuilderModal } from './DashboardAiBuilderModal';
@@ -99,7 +100,23 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
   const [insights, setInsights] = useState<DashboardInsightItem[]>([]);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
 
+  // Drag-and-drop state
+  const [draggedWidgetId, setDraggedWidgetId] = useState<string | null>(null);
+  const [dragOverWidgetId, setDragOverWidgetId] = useState<string | null>(null);
+
+  const isRefreshingRef = useRef(false);
+  const filterDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  // Cleanup debounce timers on unmount
+  useEffect(() => {
+    return () => {
+      if (filterDebounceTimerRef.current) {
+        clearTimeout(filterDebounceTimerRef.current);
+      }
+    };
+  }, []);
 
   // Reload dashboards whenever active workspace or active project changes
   useEffect(() => {
@@ -186,13 +203,19 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
   }, [currentDashboard, autoRefreshInterval, isSnapshotMode, crossFilter]);
 
   // Centralized Refresh Handler
-  const handleRefreshAll = async () => {
-    if (!currentDashboard) return;
+  const handleRefreshAll = async (
+    targetDash?: Dashboard,
+    overrideFilters?: DashboardFilter[]
+  ) => {
+    const dash = targetDash || currentDashboard;
+    if (!dash || isRefreshingRef.current) return;
+
+    isRefreshingRef.current = true;
     setIsRefreshingAll(true);
 
     try {
       // Build effective filters including cross-filter if present
-      let effectiveFilters = [...currentDashboard.filters];
+      let effectiveFilters = overrideFilters ? [...overrideFilters] : [...dash.filters];
       if (crossFilter) {
         effectiveFilters.push({
           id: 'cross-filter-active',
@@ -204,14 +227,14 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
       }
 
       const summary = await DashboardRefreshService.refreshDashboard(
-        currentDashboard,
+        dash,
         effectiveFilters,
         discoveredTables
       );
 
       // Update widget results
       const newResults = new Map(widgetResults);
-      let updatedWidgets = [...currentDashboard.widgets];
+      let updatedWidgets = [...dash.widgets];
 
       summary.results.forEach((res, widgetId) => {
         if (res.result) {
@@ -237,7 +260,7 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
 
       // Persist updated widget statuses
       const updatedDash: Dashboard = {
-        ...currentDashboard,
+        ...dash,
         widgets: updatedWidgets,
         updatedAt: new Date().toISOString()
       };
@@ -246,6 +269,7 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
     } catch (err) {
       console.error('Failed to refresh dashboard:', err);
     } finally {
+      isRefreshingRef.current = false;
       setIsRefreshingAll(false);
     }
   };
@@ -349,7 +373,7 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
     setIsEditingDesc(false);
   };
 
-  // Widget Actions: Resize, Remove, Move
+  // Widget Actions: Resize, Duplicate, Remove, Move, Drag
   const handleResizeWidget = (widgetId: string, colSpan: 3 | 4 | 6 | 8 | 12) => {
     if (!currentDashboard) return;
     const widget = currentDashboard.widgets.find(w => w.id === widgetId);
@@ -358,6 +382,33 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
       size: { ...widget.size, colSpan }
     });
     setDashboards(DashboardService.getDashboards());
+  };
+
+  const handleResizeCustom = (
+    widgetId: string,
+    size: { colSpan: number; height?: number; preset?: string }
+  ) => {
+    if (!currentDashboard) return;
+    const widget = currentDashboard.widgets.find(w => w.id === widgetId);
+    if (!widget) return;
+    const colSpan = Math.max(3, Math.min(12, size.colSpan)) as any;
+    const height = size.height ? Math.max(220, Math.min(800, size.height)) : widget.size.height;
+    DashboardService.updateWidget(currentDashboard.id, widgetId, {
+      size: { ...widget.size, colSpan, height, preset: size.preset as any }
+    });
+    setDashboards(DashboardService.getDashboards());
+  };
+
+  const handleDuplicateWidget = (widgetId: string) => {
+    if (!currentDashboard) return;
+    const res = DashboardService.duplicateWidget(currentDashboard.id, widgetId);
+    if (res) {
+      setDashboards(DashboardService.getDashboards());
+      const originalResult = widgetResults.get(widgetId);
+      if (originalResult) {
+        setWidgetResults(prev => new Map(prev).set(res.widget.id, originalResult));
+      }
+    }
   };
 
   const handleRemoveWidget = (widgetId: string) => {
@@ -399,7 +450,46 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
     setDashboards(DashboardService.getDashboards());
   };
 
-  // Filter Actions
+  // Drag and Drop Widget Reordering
+  const handleDragStart = (e: React.DragEvent, widgetId: string) => {
+    setDraggedWidgetId(widgetId);
+    e.dataTransfer.setData('text/plain', widgetId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetWidgetId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverWidgetId !== targetWidgetId) {
+      setDragOverWidgetId(targetWidgetId);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetWidgetId: string) => {
+    e.preventDefault();
+    const sourceId = e.dataTransfer.getData('text/plain') || draggedWidgetId;
+    setDragOverWidgetId(null);
+    setDraggedWidgetId(null);
+    if (!sourceId || sourceId === targetWidgetId || !currentDashboard) return;
+
+    const widgetIds = currentDashboard.widgets.map(w => w.id);
+    const sourceIdx = widgetIds.indexOf(sourceId);
+    const targetIdx = widgetIds.indexOf(targetWidgetId);
+    if (sourceIdx < 0 || targetIdx < 0) return;
+
+    widgetIds.splice(sourceIdx, 1);
+    widgetIds.splice(targetIdx, 0, sourceId);
+
+    DashboardService.reorderWidgets(currentDashboard.id, widgetIds);
+    setDashboards(DashboardService.getDashboards());
+  };
+
+  const handleDragEnd = () => {
+    setDraggedWidgetId(null);
+    setDragOverWidgetId(null);
+  };
+
+  // Filter Actions: Update, Add, Remove, Clear with reactive widget re-querying
   const handleUpdateFilter = (
     filterId: string,
     value: any,
@@ -426,28 +516,51 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
     };
     DashboardService.saveDashboard(updated);
     setDashboards(DashboardService.getDashboards());
+
+    // Debounce text/number inputs; trigger immediately for single_select and dates
+    const targetFilter = currentDashboard.filters.find(f => f.id === filterId);
+    if (targetFilter?.type === 'text' || targetFilter?.type === 'number') {
+      if (filterDebounceTimerRef.current) {
+        clearTimeout(filterDebounceTimerRef.current);
+      }
+      filterDebounceTimerRef.current = setTimeout(() => {
+        handleRefreshAll(updated, updatedFilters);
+      }, 350);
+    } else {
+      if (filterDebounceTimerRef.current) {
+        clearTimeout(filterDebounceTimerRef.current);
+      }
+      handleRefreshAll(updated, updatedFilters);
+    }
   };
 
   const handleAddFilter = (newFilter: DashboardFilter) => {
     if (!currentDashboard) return;
+    const updatedFilters = [...currentDashboard.filters, newFilter];
     const updated = {
       ...currentDashboard,
-      filters: [...currentDashboard.filters, newFilter],
+      filters: updatedFilters,
       updatedAt: new Date().toISOString()
     };
     DashboardService.saveDashboard(updated);
     setDashboards(DashboardService.getDashboards());
+
+    if (newFilter.currentValue && newFilter.currentValue !== 'ALL') {
+      handleRefreshAll(updated, updatedFilters);
+    }
   };
 
   const handleRemoveFilter = (filterId: string) => {
     if (!currentDashboard) return;
+    const updatedFilters = currentDashboard.filters.filter(f => f.id !== filterId);
     const updated = {
       ...currentDashboard,
-      filters: currentDashboard.filters.filter(f => f.id !== filterId),
+      filters: updatedFilters,
       updatedAt: new Date().toISOString()
     };
     DashboardService.saveDashboard(updated);
     setDashboards(DashboardService.getDashboards());
+    handleRefreshAll(updated, updatedFilters);
   };
 
   const handleClearAllFilters = () => {
@@ -465,6 +578,7 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
     };
     DashboardService.saveDashboard(updated);
     setDashboards(DashboardService.getDashboards());
+    handleRefreshAll(updated, cleared);
   };
 
   // Generate Insights Handler
@@ -606,6 +720,9 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
                 <h2 className="text-sm font-bold text-white tracking-tight truncate print:text-black print:text-xl">
                   {currentDashboard.name}
                 </h2>
+                <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-400 border border-slate-700/60 print:hidden">
+                  {currentDashboard.widgets.length} {currentDashboard.widgets.length === 1 ? 'widget' : 'widgets'}
+                </span>
                 {!isPresentationMode && (
                   <button
                     type="button"
@@ -700,10 +817,11 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
             title="Auto-refresh interval"
           >
             <option value={0}>Auto-refresh: Off</option>
+            <option value={30}>Every 30 sec</option>
+            <option value={60}>Every 1 min</option>
             <option value={300}>Every 5 min</option>
             <option value={900}>Every 15 min</option>
             <option value={1800}>Every 30 min</option>
-            <option value={3600}>Every 60 min</option>
           </select>
 
           {/* Snapshot Toggle */}
@@ -854,22 +972,56 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-12 gap-5 auto-rows-min">
-            {currentDashboard.widgets.map(widget => (
-              <DashboardWidgetCard
-                key={widget.id}
-                widget={widget}
-                result={widgetResults.get(widget.id)}
-                isLoading={refreshingWidgets.has(widget.id) || isRefreshingAll}
-                onRefreshWidget={handleRefreshWidget}
-                onRemoveWidget={handleRemoveWidget}
-                onResizeWidget={handleResizeWidget}
-                onMoveWidget={handleMoveWidget}
-                onEditQuery={sql => onNavigateToSqlEditor(sql)}
-                onRepairWidget={() => onNavigateToSqlEditor(widget.queryRef.sql)}
-                onCrossFilter={(col, val) => setCrossFilter({ column: col, value: val })}
-                isPresentationMode={isPresentationMode}
-              />
-            ))}
+            {currentDashboard.widgets.map(widget => {
+              const widgetRes = widgetResults.get(widget.id);
+
+              // Calculate filter compatibility for active filters
+              let compInfo: FilterCompatibilityInfo | null = null;
+              const activeFilters = currentDashboard.filters.filter(f =>
+                f.type === 'date_range'
+                  ? Boolean(f.dateFrom || f.dateTo)
+                  : f.currentValue !== undefined && f.currentValue !== null && f.currentValue !== '' && f.currentValue !== 'ALL'
+              );
+              if (activeFilters.length > 0) {
+                const firstActive = activeFilters[0];
+                const comp = DashboardFilterEngine.checkCompatibility(
+                  firstActive,
+                  widget,
+                  widgetRes?.columns
+                );
+                compInfo = {
+                  isCompatible: comp.isCompatible,
+                  filterLabel: firstActive.label,
+                  columnName: comp.columnName,
+                  reason: comp.reason
+                };
+              }
+
+              return (
+                <DashboardWidgetCard
+                  key={widget.id}
+                  widget={widget}
+                  result={widgetRes}
+                  isLoading={refreshingWidgets.has(widget.id) || isRefreshingAll}
+                  onRefreshWidget={handleRefreshWidget}
+                  onRemoveWidget={handleRemoveWidget}
+                  onResizeWidget={handleResizeWidget}
+                  onResizeCustom={handleResizeCustom}
+                  onDuplicateWidget={handleDuplicateWidget}
+                  onMoveWidget={handleMoveWidget}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  onDragEnd={handleDragEnd}
+                  isDraggedOver={dragOverWidgetId === widget.id}
+                  filterCompatibility={compInfo}
+                  onEditQuery={sql => onNavigateToSqlEditor(sql)}
+                  onRepairWidget={() => onNavigateToSqlEditor(widget.queryRef.sql)}
+                  onCrossFilter={(col, val) => setCrossFilter({ column: col, value: val })}
+                  isPresentationMode={isPresentationMode}
+                />
+              );
+            })}
           </div>
         )}
       </div>

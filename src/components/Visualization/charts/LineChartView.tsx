@@ -44,7 +44,7 @@ export const LineChartView: React.FC<LineChartViewProps> = ({ data, config }) =>
                 <span>{entry.name}:</span>
               </span>
               <span className="font-mono font-medium text-slate-100">
-                {VisualizationDataProcessor.formatNumber(entry.value)}
+                {VisualizationDataProcessor.formatNumber(entry.value, config)}
               </span>
             </div>
           ))}
@@ -55,9 +55,9 @@ export const LineChartView: React.FC<LineChartViewProps> = ({ data, config }) =>
   };
 
   return (
-    <div id="line-chart-stage" className="w-full h-full min-h-[350px]">
+    <div id="line-chart-stage" className="w-full h-full min-h-[220px]">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+        <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: config.xAxisLabel ? 45 : 35 }}>
           {config.showGrid && (
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.6} />
           )}
@@ -69,14 +69,16 @@ export const LineChartView: React.FC<LineChartViewProps> = ({ data, config }) =>
             angle={-25}
             textAnchor="end"
             height={50}
+            label={config.xAxisLabel ? { value: config.xAxisLabel, position: 'bottom', fill: '#94a3b8', fontSize: 11, offset: 15 } : undefined}
           />
           <YAxis
             stroke="#64748b"
             tick={{ fill: '#94a3b8', fontSize: 11 }}
-            tickFormatter={val => VisualizationDataProcessor.formatNumber(val)}
+            tickFormatter={val => VisualizationDataProcessor.formatNumber(val, config)}
+            label={config.yAxisLabel ? { value: config.yAxisLabel, angle: -90, position: 'left', fill: '#94a3b8', fontSize: 11, offset: 10 } : undefined}
           />
 
-          <Tooltip content={<CustomTooltip />} />
+          {config.showTooltip !== false && <Tooltip content={<CustomTooltip />} />}
           {config.showLegend && <Legend wrapperStyle={{ paddingTop: 10, fontSize: 12 }} />}
 
           {measures.map((mKey, idx) => {
@@ -97,7 +99,7 @@ export const LineChartView: React.FC<LineChartViewProps> = ({ data, config }) =>
                     dataKey={mKey}
                     position="top"
                     formatter={(val: any) =>
-                      typeof val === 'number' ? VisualizationDataProcessor.formatNumber(val) : ''
+                      typeof val === 'number' ? VisualizationDataProcessor.formatNumber(val, config) : ''
                     }
                     fill="#94a3b8"
                     fontSize={10}

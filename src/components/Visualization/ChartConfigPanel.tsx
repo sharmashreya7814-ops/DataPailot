@@ -11,7 +11,11 @@ import {
   Settings2,
   Sliders,
   Sparkles,
-  Info
+  Info,
+  Grid,
+  TrendingUp,
+  Percent,
+  Compass
 } from 'lucide-react';
 import {
   ChartConfig,
@@ -22,6 +26,7 @@ import {
   SortOrder,
   ChartAggregation
 } from '../../types/visualization';
+import { ChartRecommender } from '../../services/chartRecommender';
 
 interface ChartConfigPanelProps {
   config: ChartConfig;
@@ -32,16 +37,28 @@ interface ChartConfigPanelProps {
   isAiLoading?: boolean;
 }
 
-const CHART_TYPES: { type: ChartType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { type: 'bar', label: 'Vertical Bar', icon: BarChart2 },
+const CORE_CHART_TYPES: { type: ChartType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { type: 'bar', label: 'Bar Chart', icon: BarChart2 },
   { type: 'horizontal_bar', label: 'Horizontal Bar', icon: BarChartHorizontal },
+  { type: 'grouped_bar', label: 'Grouped Bar', icon: BarChart2 },
+  { type: 'stacked_bar', label: 'Stacked Bar', icon: BarChart2 },
+  { type: 'percent_bar', label: '100% Stacked', icon: Percent },
   { type: 'line', label: 'Line Chart', icon: LineChart },
   { type: 'area', label: 'Area Chart', icon: Layers },
+  { type: 'stacked_area', label: 'Stacked Area', icon: Layers },
   { type: 'pie', label: 'Pie Chart', icon: PieChart },
   { type: 'donut', label: 'Donut Chart', icon: PieChart },
-  { type: 'scatter', label: 'Scatter Plot', icon: ScatterIcon },
+  { type: 'scatter', label: 'Scatter Plot', icon: ScatterIcon }
+];
+
+const ANALYTICAL_CHART_TYPES: { type: ChartType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { type: 'composed', label: 'Composed Chart', icon: Layers },
+  { type: 'radar', label: 'Radar Chart', icon: Compass },
+  { type: 'radial_bar', label: 'Radial Bar', icon: Activity },
+  { type: 'funnel', label: 'Funnel Chart', icon: Sliders },
+  { type: 'treemap', label: 'Treemap', icon: Grid },
   { type: 'histogram', label: 'Histogram', icon: BarChart2 },
-  { type: 'kpi', label: 'KPI Card', icon: Activity },
+  { type: 'kpi', label: 'KPI Card', icon: TrendingUp },
   { type: 'table', label: 'Data Table', icon: TableIcon }
 ];
 
@@ -56,8 +73,18 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
   const numericColumns = columns.filter(c => c.isNumeric);
   const categoricalColumns = columns.filter(c => !c.isNumeric || c.isDateOrTime);
 
-  const isCount = config.aggregation === 'count';
-  const isSumOrAvg = config.aggregation === 'sum' || config.aggregation === 'avg';
+  const recommendations = React.useMemo(() => {
+    return ChartRecommender.getRecommendations(columns, columns[0]?.sampleValues?.length || 10);
+  }, [columns]);
+
+  const recommendedMap = React.useMemo(() => {
+    const map = new Map<string, string>();
+    recommendations.forEach(r => map.set(r.chartType, r.reason));
+    return map;
+  }, [recommendations]);
+
+  const isCount = config.aggregation === 'count' || config.aggregation === 'count_distinct';
+  const isSumOrAvg = config.aggregation === 'sum' || config.aggregation === 'avg' || config.aggregation === 'median';
   const isMinOrMax = config.aggregation === 'min' || config.aggregation === 'max';
 
   // Filter selectable measure columns based on active aggregation
@@ -70,7 +97,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
       return columns;
     }
     if (isSumOrAvg) {
-      // SUM and AVG strictly require numeric columns
+      // SUM, AVG, MEDIAN strictly require numeric columns
       return columns.filter(c => c.isNumeric);
     }
     if (isMinOrMax) {
@@ -82,7 +109,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
 
   const handleAggregationChange = (newAgg: ChartAggregation) => {
     let nextY = config.yAxis;
-    if (newAgg === 'sum' || newAgg === 'avg') {
+    if (newAgg === 'sum' || newAgg === 'avg' || newAgg === 'median') {
       const currentCol = columns.find(c => c.name === config.yAxis);
       if (config.yAxis === 'All Rows' || !currentCol || !currentCol.isNumeric) {
         nextY = numericColumns[0]?.name || '';
@@ -120,8 +147,14 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
   const isMultiSeriesSupported =
     config.chartType === 'bar' ||
     config.chartType === 'horizontal_bar' ||
+    config.chartType === 'grouped_bar' ||
+    config.chartType === 'stacked_bar' ||
+    config.chartType === 'percent_bar' ||
     config.chartType === 'line' ||
-    config.chartType === 'area';
+    config.chartType === 'area' ||
+    config.chartType === 'stacked_area' ||
+    config.chartType === 'composed' ||
+    config.chartType === 'radar';
 
   return (
     <div id="chart-config-panel" className="w-80 flex flex-col h-full bg-slate-900 border-r border-slate-800 text-xs overflow-y-auto">
@@ -170,28 +203,72 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
       )}
 
       <div className="p-4 space-y-5">
-        {/* 1. Chart Type Grid */}
+        {/* 1. Core Chart Types */}
         <div>
           <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-            Visualization Type
+            Core Visualizations
           </label>
           <div className="grid grid-cols-2 gap-1.5">
-            {CHART_TYPES.map(ct => {
+            {CORE_CHART_TYPES.map(ct => {
               const Icon = ct.icon;
               const isSelected = config.chartType === ct.type;
+              const isRecommended = recommendedMap.has(ct.type);
+              const recReason = recommendedMap.get(ct.type);
               return (
                 <button
                   key={ct.type}
                   id={`chart-type-${ct.type}`}
                   onClick={() => handleTypeSelect(ct.type)}
-                  className={`flex items-center space-x-2 px-2.5 py-2 rounded-lg border text-left transition-all ${
+                  title={isRecommended ? `Recommended: ${recReason}` : undefined}
+                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-left transition-all relative ${
                     isSelected
                       ? 'bg-indigo-600/20 border-indigo-500 text-white font-medium shadow-sm'
                       : 'bg-slate-850/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                   }`}
                 >
-                  <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-indigo-400' : 'text-slate-400'}`} />
-                  <span className="truncate">{ct.label}</span>
+                  <div className="flex items-center space-x-1.5 min-w-0">
+                    <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? 'text-indigo-400' : 'text-slate-400'}`} />
+                    <span className="truncate text-[11px]">{ct.label}</span>
+                  </div>
+                  {isRecommended && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" title="Recommended for this dataset" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 2. Analytical Chart Types */}
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+            Analytical & Specialized
+          </label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {ANALYTICAL_CHART_TYPES.map(ct => {
+              const Icon = ct.icon;
+              const isSelected = config.chartType === ct.type;
+              const isRecommended = recommendedMap.has(ct.type);
+              const recReason = recommendedMap.get(ct.type);
+              return (
+                <button
+                  key={ct.type}
+                  id={`chart-type-${ct.type}`}
+                  onClick={() => handleTypeSelect(ct.type)}
+                  title={isRecommended ? `Recommended: ${recReason}` : undefined}
+                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-left transition-all ${
+                    isSelected
+                      ? 'bg-indigo-600/20 border-indigo-500 text-white font-medium shadow-sm'
+                      : 'bg-slate-850/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center space-x-1.5 min-w-0">
+                    <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? 'text-indigo-400' : 'text-slate-400'}`} />
+                    <span className="truncate text-[11px]">{ct.label}</span>
+                  </div>
+                  {isRecommended && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" title="Recommended for this dataset" />
+                  )}
                 </button>
               );
             })}
@@ -200,7 +277,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
 
         {config.chartType !== 'table' && (
           <>
-            {/* 2. Dimensions & Measures Axis Mapping */}
+            {/* 3. Dimensions & Measures Axis Mapping */}
             <div className="space-y-3 pt-2 border-t border-slate-800/80">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
@@ -217,6 +294,8 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                       ? 'X Axis (Numeric)'
                       : config.chartType === 'histogram'
                       ? 'Numeric Column (Distribution)'
+                      : config.chartType === 'funnel'
+                      ? 'Stage / Step Column'
                       : 'X Axis (Category / Date)'}
                   </label>
                   <select
@@ -232,9 +311,6 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                       </option>
                     ))}
                   </select>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-tight">
-                    Choose a category, date, or compatible field
-                  </p>
                 </div>
               )}
 
@@ -266,18 +342,6 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                       </option>
                     ))}
                   </select>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-tight">
-                    Choose a measure or count
-                  </p>
-                  {isSumOrAvg ? (
-                    <p className="text-[10px] text-amber-400/90 mt-0.5 leading-tight">
-                      {config.aggregation.toUpperCase()} requires a numeric column.
-                    </p>
-                  ) : isMinOrMax ? (
-                    <p className="text-[10px] text-amber-400/90 mt-0.5 leading-tight">
-                      {config.aggregation.toUpperCase()} requires a numeric or date column.
-                    </p>
-                  ) : null}
                 </div>
               )}
 
@@ -285,20 +349,31 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
               {config.chartType !== 'scatter' && config.chartType !== 'histogram' && (
                 <div>
                   <label className="block text-slate-400 mb-1 text-[11px]">Aggregation</label>
-                  <div className="grid grid-cols-3 gap-1">
-                    {(['count', 'sum', 'avg', 'min', 'max', 'none'] as ChartAggregation[]).map(agg => (
+                  <div className="grid grid-cols-4 gap-1">
+                    {(
+                      [
+                        { id: 'count', label: 'COUNT' },
+                        { id: 'count_distinct', label: 'COUNT DIST' },
+                        { id: 'sum', label: 'SUM' },
+                        { id: 'avg', label: 'AVG' },
+                        { id: 'min', label: 'MIN' },
+                        { id: 'max', label: 'MAX' },
+                        { id: 'median', label: 'MEDIAN' },
+                        { id: 'none', label: 'NONE' }
+                      ] as const
+                    ).map(agg => (
                       <button
-                        key={agg}
+                        key={agg.id}
                         type="button"
-                        id={`btn-agg-${agg}`}
-                        onClick={() => handleAggregationChange(agg)}
-                        className={`py-1 rounded text-center text-[11px] font-mono border transition-all ${
-                          config.aggregation === agg
+                        id={`btn-agg-${agg.id}`}
+                        onClick={() => handleAggregationChange(agg.id as ChartAggregation)}
+                        className={`py-1 rounded text-center text-[10px] font-mono border transition-all ${
+                          config.aggregation === agg.id
                             ? 'bg-indigo-600 border-indigo-500 text-white font-semibold'
                             : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
                         }`}
                       >
-                        {agg.toUpperCase()}
+                        {agg.label}
                       </button>
                     ))}
                   </div>
@@ -379,7 +454,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
               )}
             </div>
 
-            {/* 3. Sorting & Limiting */}
+            {/* 4. Sorting & Limiting */}
             <div className="space-y-3 pt-2 border-t border-slate-800/80">
               <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                 Sorting & Row Limits
@@ -416,12 +491,93 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                     <option value="10">Top 10</option>
                     <option value="20">Top 20</option>
                     <option value="50">Top 50</option>
+                    <option value="100">Top 100</option>
                   </select>
                 </div>
               </div>
             </div>
 
-            {/* 4. Display & Formatting Options */}
+            {/* 5. Axis Titles (Phase 4) */}
+            {config.chartType !== 'kpi' && config.chartType !== 'pie' && config.chartType !== 'donut' && config.chartType !== 'treemap' && (
+              <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Axis Titles
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-slate-400 mb-1 text-[10px]">X Axis Title</label>
+                    <input
+                      type="text"
+                      value={config.xAxisLabel || ''}
+                      onChange={e => onChangeConfig({ ...config, xAxisLabel: e.target.value })}
+                      placeholder="e.g. Month"
+                      className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1 text-[10px]">Y Axis Title</label>
+                    <input
+                      type="text"
+                      value={config.yAxisLabel || ''}
+                      onChange={e => onChangeConfig({ ...config, yAxisLabel: e.target.value })}
+                      placeholder="e.g. Revenue ($)"
+                      className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 6. Number & Measure Formatting (Phase 4) */}
+            <div className="space-y-2 pt-2 border-t border-slate-800/80">
+              <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                Number & Metric Formatting
+              </label>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-400 mb-1 text-[10px]">Format Style</label>
+                  <select
+                    value={config.numberFormat || 'standard'}
+                    onChange={e => onChangeConfig({ ...config, numberFormat: e.target.value as any })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none"
+                  >
+                    <option value="standard">Standard (1,234.56)</option>
+                    <option value="compact">Compact (1.2k / 1.2M)</option>
+                    <option value="currency">Currency ($ / € / £)</option>
+                    <option value="percent">Percentage (%)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 mb-1 text-[10px]">Decimal Precision</label>
+                  <select
+                    value={config.decimalPrecision !== undefined ? config.decimalPrecision : 2}
+                    onChange={e => onChangeConfig({ ...config, decimalPrecision: parseInt(e.target.value, 10) })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none"
+                  >
+                    <option value={0}>0 decimals (12)</option>
+                    <option value={1}>1 decimal (12.3)</option>
+                    <option value={2}>2 decimals (12.34)</option>
+                    <option value={3}>3 decimals (12.345)</option>
+                  </select>
+                </div>
+              </div>
+
+              {config.numberFormat === 'currency' && (
+                <div>
+                  <label className="block text-slate-400 mb-1 text-[10px]">Currency Symbol</label>
+                  <input
+                    type="text"
+                    value={config.currencySymbol || '$'}
+                    onChange={e => onChangeConfig({ ...config, currencySymbol: e.target.value })}
+                    className="w-20 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 7. Display & Toggles */}
             <div className="space-y-3 pt-2 border-t border-slate-800/80">
               <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                 Labels & Display
@@ -439,7 +595,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1 text-[11px]">Subtitle / Context</label>
+                <label className="block text-slate-400 mb-1 text-[11px]">Description / Context</label>
                 <input
                   type="text"
                   value={config.subtitle || ''}
@@ -450,7 +606,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
               </div>
 
               {/* Toggles */}
-              <div className="space-y-2 pt-1">
+              <div className="grid grid-cols-2 gap-2 pt-1">
                 <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
                   <input
                     type="checkbox"
@@ -458,7 +614,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                     onChange={e => onChangeConfig({ ...config, showLegend: e.target.checked })}
                     className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0"
                   />
-                  <span>Show Legend</span>
+                  <span>Legend</span>
                 </label>
 
                 <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
@@ -468,7 +624,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                     onChange={e => onChangeConfig({ ...config, showDataLabels: e.target.checked })}
                     className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0"
                   />
-                  <span>Show Data Labels</span>
+                  <span>Data Labels</span>
                 </label>
 
                 <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
@@ -478,20 +634,30 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                     onChange={e => onChangeConfig({ ...config, showGrid: e.target.checked })}
                     className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0"
                   />
-                  <span>Show Grid Lines</span>
+                  <span>Grid Lines</span>
                 </label>
 
-                {/* Safe NULL Handling Toggle */}
-                <label className="flex items-center space-x-2 text-slate-400 hover:text-slate-300 cursor-pointer pt-1 border-t border-slate-800/40">
+                <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={config.treatNullAsZero}
-                    onChange={e => onChangeConfig({ ...config, treatNullAsZero: e.target.checked })}
+                    checked={config.showTooltip !== false}
+                    onChange={e => onChangeConfig({ ...config, showTooltip: e.target.checked })}
                     className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0"
                   />
-                  <span>Treat NULL values as 0</span>
+                  <span>Tooltips</span>
                 </label>
               </div>
+
+              {/* Safe NULL Handling Toggle */}
+              <label className="flex items-center space-x-2 text-slate-400 hover:text-slate-300 cursor-pointer pt-1 border-t border-slate-800/40">
+                <input
+                  type="checkbox"
+                  checked={config.treatNullAsZero}
+                  onChange={e => onChangeConfig({ ...config, treatNullAsZero: e.target.checked })}
+                  className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0"
+                />
+                <span>Treat NULL values as 0</span>
+              </label>
             </div>
           </>
         )}

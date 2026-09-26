@@ -82,6 +82,92 @@ export class DashboardExportService {
   }
 
   /**
+   * Exports single widget query result as CSV
+   */
+  public static exportWidgetCsv(widget: { title: string; chartType: string }, result?: QueryResult): void {
+    if (!result || !result.rows || result.rows.length === 0) {
+      alert('No data available to export for this widget.');
+      return;
+    }
+
+    const colNames = result.columns.map(c => c.name);
+    let csvContent = colNames.join(',') + '\n';
+
+    for (const row of result.rows) {
+      const line = colNames
+        .map(c => {
+          const val = row[c];
+          if (val === null || val === undefined) return '';
+          return JSON.stringify(val);
+        })
+        .join(',');
+      csvContent += line + '\n';
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const filename = `${widget.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_data.csv`;
+    this.triggerDownload(blob, filename);
+  }
+
+  /**
+   * Exports the SVG visualization inside a widget container as a high-res PNG image
+   */
+  public static async exportWidgetPng(widgetContainerId: string, widgetTitle: string): Promise<void> {
+    try {
+      const container = document.getElementById(widgetContainerId);
+      if (!container) return;
+
+      const svgElem = container.querySelector('svg');
+      if (!svgElem) {
+        alert('Could not find visualization SVG to export.');
+        return;
+      }
+
+      // Clone SVG and set background
+      const svgClone = svgElem.cloneNode(true) as SVGSVGElement;
+      const width = svgElem.clientWidth || 800;
+      const height = svgElem.clientHeight || 450;
+      svgClone.setAttribute('width', `${width}`);
+      svgClone.setAttribute('height', `${height}`);
+
+      // Add dark background rect
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('width', '100%');
+      rect.setAttribute('height', '100%');
+      rect.setAttribute('fill', '#0f172a');
+      svgClone.insertBefore(rect, svgClone.firstChild);
+
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(svgClone);
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const URL = window.URL || window.webkitURL || window;
+      const blobURL = URL.createObjectURL(svgBlob);
+
+      const image = new Image();
+      image.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = width * 2; // 2x for retina quality
+        canvas.height = height * 2;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.scale(2, 2);
+        ctx.drawImage(image, 0, 0);
+
+        canvas.toBlob(pngBlob => {
+          if (pngBlob) {
+            const filename = `${widgetTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}_chart.png`;
+            this.triggerDownload(pngBlob, filename);
+          }
+        }, 'image/png');
+        URL.revokeObjectURL(blobURL);
+      };
+      image.src = blobURL;
+    } catch (err) {
+      console.error('Failed to export widget PNG:', err);
+    }
+  }
+
+  /**
    * Triggers native browser print dialog formatted for PDF export
    */
   public static printDashboardAsPdf(): void {

@@ -17,17 +17,58 @@ export class DashboardFilterEngine {
     widget: DashboardWidget,
     columns?: QueryResultColumn[]
   ): FilterCompatibilityResult {
-    const targetCol = filter.targetColumn.trim().toLowerCase();
-    if (!targetCol) {
+    const rawTarget = filter.targetColumn.trim();
+    if (!rawTarget) {
       return {
         isCompatible: false,
         reason: 'Filter does not specify a target column.'
       };
     }
 
+    // Parse potential schema/table qualification, e.g. "customers.gender"
+    let filterTable: string | undefined = filter.targetTable?.trim().toLowerCase();
+    let filterCol = rawTarget.toLowerCase();
+
+    if (rawTarget.includes('.')) {
+      const parts = rawTarget.split('.');
+      if (parts.length === 2) {
+        if (!filterTable) filterTable = parts[0].toLowerCase();
+        filterCol = parts[1].toLowerCase();
+      } else if (parts.length >= 3) {
+        if (!filterTable) filterTable = parts[parts.length - 2].toLowerCase();
+        filterCol = parts[parts.length - 1].toLowerCase();
+      }
+    }
+
+    const sql = (widget.queryRef.sql || '').toLowerCase();
+    const cleanSql = sql.replace(/'[^']*'/g, ''); // strip string literals
+
+    // Cross-filtering safety: If a specific table was targeted, ensure this widget references that table
+    if (filterTable) {
+      const widgetSourceTable = widget.queryRef.sourceTable?.toLowerCase();
+      const widgetRefTables = (widget.queryRef.referencedTables || []).map(t => t.toLowerCase());
+      const tableMentionedInSql = new RegExp(`\\b${filterTable}\\b`, 'i').test(cleanSql);
+
+      const hasTableAffinity =
+        widgetSourceTable === filterTable ||
+        widgetRefTables.includes(filterTable) ||
+        tableMentionedInSql;
+
+      // If the widget has explicit sourceTable or referencedTables and none match the filter's targetTable,
+      // it is not compatible.
+      if (!hasTableAffinity && (widgetSourceTable || widgetRefTables.length > 0)) {
+        return {
+          isCompatible: false,
+          reason: `Visualization queries table '${widgetSourceTable || widgetRefTables.join(', ')}', not '${filterTable}'.`
+        };
+      }
+    }
+
     // 1. Check if column exists in the widget's actual query result columns
     if (columns && columns.length > 0) {
-      const matched = columns.find(c => c.name.toLowerCase() === targetCol);
+      const matched = columns.find(
+        c => c.name.toLowerCase() === filterCol || c.name.toLowerCase() === rawTarget.toLowerCase()
+      );
       if (matched) {
         return {
           isCompatible: true,
@@ -39,33 +80,35 @@ export class DashboardFilterEngine {
 
     // 2. Check widget queryRef metadata
     if (widget.queryRef.referencedColumns) {
-      const matchedRef = widget.queryRef.referencedColumns.find(c => c.toLowerCase() === targetCol);
+      const matchedRef = widget.queryRef.referencedColumns.find(
+        c => c.toLowerCase() === filterCol || c.toLowerCase() === rawTarget.toLowerCase()
+      );
       if (matchedRef) {
+        // Find if mapped to clean name in columns
+        const projCol = columns?.find(c => c.name.toLowerCase() === matchedRef.toLowerCase());
         return {
           isCompatible: true,
-          columnName: matchedRef,
+          columnName: projCol ? projCol.name : (matchedRef.includes('.') ? matchedRef.split('.').pop()! : matchedRef),
           reason: `Column '${matchedRef}' found in query source references.`
         };
       }
     }
 
     // 3. Fallback: inspect raw SQL for column appearance
-    const sql = (widget.queryRef.sql || '').toLowerCase();
-    const cleanSql = sql.replace(/'[^']*'/g, ''); // strip string literals
-
-    // Match column name as identifier
-    const colRegex = new RegExp(`\\b${targetCol}\\b`, 'i');
+    const colRegex = new RegExp(`\\b${filterCol}\\b`, 'i');
     if (colRegex.test(cleanSql)) {
+      // Find actual projection column if possible
+      const projCol = columns?.find(c => c.name.toLowerCase() === filterCol);
       return {
         isCompatible: true,
-        columnName: filter.targetColumn,
-        reason: `Field '${filter.targetColumn}' referenced in query statement.`
+        columnName: projCol ? projCol.name : filterCol,
+        reason: `Field '${filterCol}' referenced in query statement.`
       };
     }
 
     return {
       isCompatible: false,
-      reason: `Visualization does not contain or return field '${filter.targetColumn}'.`
+      reason: `Visualization does not contain or return field '${rawTarget}'.`
     };
   }
 

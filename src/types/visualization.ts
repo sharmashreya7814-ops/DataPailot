@@ -5,17 +5,24 @@ export type ChartType =
   | 'kpi'
   | 'bar'
   | 'horizontal_bar'
+  | 'grouped_bar'
+  | 'stacked_bar'
+  | 'percent_bar'
   | 'line'
   | 'area'
+  | 'stacked_area'
   | 'pie'
   | 'donut'
   | 'scatter'
   | 'histogram'
+  | 'composed'
+  | 'radar'
+  | 'radial_bar'
+  | 'funnel'
+  | 'treemap'
   // Extensible for future visualization additions:
   | 'heatmap'
   | 'box_plot'
-  | 'funnel'
-  | 'treemap'
   | 'map';
 
 export type ColumnSemanticType =
@@ -55,10 +62,18 @@ export interface ChartRecommendation {
   warning?: string;
 }
 
-export type AggregationType = 'none' | 'sum' | 'avg' | 'min' | 'max' | 'count';
+export type AggregationType =
+  | 'none'
+  | 'sum'
+  | 'avg'
+  | 'min'
+  | 'max'
+  | 'count'
+  | 'count_distinct'
+  | 'median';
 export type ChartAggregation = AggregationType;
 export type SortOrder = 'none' | 'asc' | 'desc';
-export type ChartLimit = 'all' | 5 | 10 | 20 | 50;
+export type ChartLimit = 'all' | 5 | 10 | 20 | 50 | 100;
 
 export interface ChartConfig {
   chartType: ChartType;
@@ -75,11 +90,16 @@ export interface ChartConfig {
   showLegend: boolean;
   showDataLabels: boolean;
   showGrid: boolean;
+  showTooltip?: boolean;
   xAxisLabel?: string;
   yAxisLabel?: string;
   binCount: number; // For histogram: 10, 20, 30, 50
   treatNullAsZero: boolean;
   samplingEnabled?: boolean;
+  numberFormat?: 'standard' | 'compact' | 'currency' | 'percent';
+  currencySymbol?: string;
+  decimalPrecision?: number;
+  dateFormat?: string;
 }
 
 export interface SavedVisualization {

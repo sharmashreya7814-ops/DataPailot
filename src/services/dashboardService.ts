@@ -6,6 +6,38 @@ const LAST_OPENED_KEY = 'datapilot_last_opened_dashboard_id';
 export class DashboardService {
   private static workspaceId: string = (typeof localStorage !== 'undefined' && localStorage.getItem('datapilot_active_workspace_id')) || 'ws_primary';
   private static projectId: string | null = (typeof localStorage !== 'undefined' && localStorage.getItem('datapilot_active_project_id')) || null;
+  private static memoryStorage = new Map<string, string>();
+
+  private static getItem(key: string): string | null {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        return localStorage.getItem(key);
+      } catch {
+        return this.memoryStorage.get(key) || null;
+      }
+    }
+    return this.memoryStorage.get(key) || null;
+  }
+
+  private static setItem(key: string, val: string): void {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(key, val);
+        return;
+      } catch {}
+    }
+    this.memoryStorage.set(key, val);
+  }
+
+  private static removeItem(key: string): void {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(key);
+        return;
+      } catch {}
+    }
+    this.memoryStorage.delete(key);
+  }
 
   public static setWorkspaceId(id: string) {
     this.workspaceId = id;
@@ -36,10 +68,10 @@ export class DashboardService {
    */
   public static getDashboards(): Dashboard[] {
     try {
-      let raw = localStorage.getItem(this.getStorageKey());
+      let raw = this.getItem(this.getStorageKey());
       // Backward compatibility for primary workspace without project
       if (!raw && this.workspaceId === 'ws_primary' && !this.projectId) {
-        raw = localStorage.getItem(DASHBOARDS_STORAGE_KEY);
+        raw = this.getItem(DASHBOARDS_STORAGE_KEY);
       }
       if (!raw) return [];
       const parsed: Dashboard[] = JSON.parse(raw);
@@ -79,7 +111,7 @@ export class DashboardService {
     }
 
     try {
-      localStorage.setItem(this.getStorageKey(), JSON.stringify(newList));
+      this.setItem(this.getStorageKey(), JSON.stringify(newList));
     } catch (e) {
       console.error('Failed to persist dashboards:', e);
     }
@@ -148,9 +180,9 @@ export class DashboardService {
     if (filtered.length === list.length) return false;
 
     try {
-      localStorage.setItem(this.getStorageKey(), JSON.stringify(filtered));
+      this.setItem(this.getStorageKey(), JSON.stringify(filtered));
       if (this.getLastOpenedDashboardId() === id) {
-        localStorage.removeItem(this.getLastOpenedKey());
+        this.removeItem(this.getLastOpenedKey());
       }
       return true;
     } catch {
@@ -192,6 +224,73 @@ export class DashboardService {
     d.widgets.push(newWidget);
     const updated = this.saveDashboard(d);
     return { dashboard: updated, widget: newWidget };
+  }
+
+  /**
+   * Duplicates a widget within a dashboard
+   */
+  public static duplicateWidget(
+    dashboardId: string,
+    widgetId: string
+  ): { dashboard: Dashboard; widget: DashboardWidget } | null {
+    const d = this.getDashboardById(dashboardId);
+    if (!d) return null;
+
+    const originalIdx = d.widgets.findIndex(w => w.id === widgetId);
+    if (originalIdx < 0) return null;
+    const original = d.widgets[originalIdx];
+
+    const newWidgetId = `widget-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const duplicated: DashboardWidget = {
+      ...JSON.parse(JSON.stringify(original)),
+      id: newWidgetId,
+      title: `${original.title} (Copy)`,
+      position: {
+        ...original.position,
+        order: original.position.order + 1
+      }
+    };
+
+    // Insert directly after the original widget
+    d.widgets.splice(originalIdx + 1, 0, duplicated);
+
+    // Re-index all orders
+    d.widgets.forEach((w, idx) => {
+      w.position = { ...w.position, order: idx };
+    });
+
+    const updated = this.saveDashboard(d);
+    return { dashboard: updated, widget: duplicated };
+  }
+
+  /**
+   * Reorders widgets according to the specified array of widget IDs
+   */
+  public static reorderWidgets(dashboardId: string, widgetIds: string[]): Dashboard | null {
+    const d = this.getDashboardById(dashboardId);
+    if (!d) return null;
+
+    const widgetMap = new Map(d.widgets.map(w => [w.id, w]));
+    const reordered: DashboardWidget[] = [];
+
+    widgetIds.forEach((id, idx) => {
+      const w = widgetMap.get(id);
+      if (w) {
+        w.position = { ...w.position, order: idx };
+        reordered.push(w);
+      }
+    });
+
+    // Add any remaining widgets
+    d.widgets.forEach(w => {
+      if (!widgetIds.includes(w.id)) {
+        w.position = { ...w.position, order: reordered.length };
+        reordered.push(w);
+      }
+    });
+
+    d.widgets = reordered;
+    return this.saveDashboard(d);
   }
 
   /**
@@ -245,10 +344,10 @@ export class DashboardService {
   }
 
   public static getLastOpenedDashboardId(): string | null {
-    return localStorage.getItem(this.getLastOpenedKey()) || localStorage.getItem(LAST_OPENED_KEY);
+    return this.getItem(this.getLastOpenedKey()) || this.getItem(LAST_OPENED_KEY);
   }
 
   public static setLastOpenedDashboardId(id: string): void {
-    localStorage.setItem(this.getLastOpenedKey(), id);
+    this.setItem(this.getLastOpenedKey(), id);
   }
 }
