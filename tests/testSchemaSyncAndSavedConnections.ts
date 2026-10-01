@@ -271,5 +271,44 @@ export async function runSchemaSyncAndSavedConnectionsTests(): Promise<TestResul
   record('29. Saved connection profile can be safely deleted', deleted === true);
   record('30. Deleted profile no longer exists in store', store.getById(saved.id) === null);
 
+  // ==========================================
+  // 4. CONNECTION LOADING UX & ZERO-WHITE-FLASH
+  // ==========================================
+  const indexHtml = fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf8');
+  record(
+    '31. index.html body has dark background class (bg-slate-950) to prevent white flash',
+    indexHtml.includes('bg-slate-950')
+  );
+
+  const indexCss = fs.readFileSync(path.join(process.cwd(), 'src', 'index.css'), 'utf8');
+  record(
+    '32. index.css defines base dark background (#020617) for html, body, and root',
+    indexCss.includes('#020617') && indexCss.includes('html, body, #root')
+  );
+
+  const loadingComponentFile = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'common', 'DatabaseConnectionLoading.tsx'),
+    'utf8'
+  );
+  record(
+    '33. DatabaseConnectionLoading defines required status progression steps',
+    loadingComponentFile.includes('Establishing secure connection') &&
+    loadingComponentFile.includes('Authenticating credentials') &&
+    loadingComponentFile.includes('Discovering database schema') &&
+    loadingComponentFile.includes('Loading tables and metadata')
+  );
+  record(
+    '34. DatabaseConnectionLoading includes accessibility aria-busy and aria-live status',
+    loadingComponentFile.includes('aria-busy="true"') &&
+    loadingComponentFile.includes('aria-live="polite"') &&
+    loadingComponentFile.includes('role="status"')
+  );
+  record(
+    '35. DatabaseConnectionLoading has animated progress indicator and dark enterprise styling',
+    loadingComponentFile.includes('bg-gradient-to-r') &&
+    loadingComponentFile.includes('Connecting to database...') &&
+    loadingComponentFile.includes('This may take a few seconds')
+  );
+
   return results;
 }
