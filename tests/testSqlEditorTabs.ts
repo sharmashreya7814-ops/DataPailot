@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { SqlEditorTab } from '../src/types/database';
 
 export function runSqlEditorTabsTests() {
@@ -66,6 +68,33 @@ export function runSqlEditorTabsTests() {
   tabs = filtered;
 
   assertTest('Close tab', tabs.length === 2 && activeTabId === 'tab-1', 'Should close tab and fallback to previous tab');
+
+  // 7. Custom ConfirmDialog replacement verification
+  const appTsx = fs.readFileSync(path.join(process.cwd(), 'src', 'App.tsx'), 'utf8');
+  assertTest(
+    'Native window.confirm removed from SQL tab close flow',
+    !appTsx.includes('window.confirm') && !appTsx.includes('confirm(`Close ${'),
+    'App.tsx should not use window.confirm for closing tabs'
+  );
+
+  assertTest(
+    'App.tsx imports and renders ConfirmDialog',
+    appTsx.includes('ConfirmDialog') && appTsx.includes('Unsaved SQL Changes') && appTsx.includes('Keep Editing') && appTsx.includes('Close Query'),
+    'App.tsx should use ConfirmDialog with matching title and actions'
+  );
+
+  const confirmDialogFile = fs.readFileSync(path.join(process.cwd(), 'src', 'components', 'common', 'ConfirmDialog.tsx'), 'utf8');
+  assertTest(
+    'ConfirmDialog implements accessibility roles & attributes',
+    confirmDialogFile.includes('role="dialog"') && confirmDialogFile.includes('aria-modal="true"') && confirmDialogFile.includes('aria-labelledby') && confirmDialogFile.includes('aria-describedby'),
+    'ConfirmDialog must satisfy accessibility dialog requirements'
+  );
+
+  assertTest(
+    'ConfirmDialog defaults focus to safe action and handles Escape',
+    confirmDialogFile.includes('cancelBtnRef') && confirmDialogFile.includes('Escape') && confirmDialogFile.includes('previousActiveElementRef'),
+    'ConfirmDialog must focus safe action and restore focus upon cancel'
+  );
 
   return results;
 }

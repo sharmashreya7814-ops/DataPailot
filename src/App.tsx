@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { DatabaseExplorer } from './components/Sidebar/DatabaseExplorer';
 import { DatabaseConnectionLoading } from './components/common/DatabaseConnectionLoading';
+import { ConfirmDialog } from './components/common/ConfirmDialog';
 import { ConnectionModal } from './components/Sidebar/ConnectionModal';
 import { SaveConnectionPromptModal } from './components/Sidebar/SaveConnectionPromptModal';
 import { SqlEditor } from './components/Editor/SqlEditor';
@@ -348,20 +349,9 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
     setTabCounter(prev => prev + 1);
   };
 
-  const handleCloseTab = (id: string) => {
-    const tabToClose = tabs.find(t => t.id === id);
-    if (!tabToClose) return;
-    
-    // Prevent accidental loss
-    const isUnsaved = tabToClose.query.trim().length > 0 && tabToClose.query !== `-- Write your read-only SQL query here
-SELECT table_name, table_type FROM information_schema.tables WHERE table_schema = 'public';
-`;
-    if (isUnsaved) {
-      if (!window.confirm(`Close ${tabToClose.name}? Unsaved SQL will be lost.`)) {
-        return;
-      }
-    }
-    
+  const [tabToClosePending, setTabToClosePending] = useState<SqlEditorTab | null>(null);
+
+  const executeCloseTab = (id: string) => {
     setTabs(prev => {
       const filtered = prev.filter(t => t.id !== id);
       if (filtered.length === 0) {
@@ -385,6 +375,22 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
       controller.abort();
       queryAbortControllersRef.current.delete(id);
     }
+  };
+
+  const handleCloseTab = (id: string) => {
+    const tabToClose = tabs.find(t => t.id === id);
+    if (!tabToClose) return;
+    
+    // Prevent accidental loss (preserved exact detection logic)
+    const isUnsaved = tabToClose.query.trim().length > 0 && tabToClose.query !== `-- Write your read-only SQL query here
+SELECT table_name, table_type FROM information_schema.tables WHERE table_schema = 'public';
+`;
+    if (isUnsaved) {
+      setTabToClosePending(tabToClose);
+      return;
+    }
+    
+    executeCloseTab(id);
   };
 
   const handleRenameTab = (id: string, newName: string) => {
@@ -1373,6 +1379,26 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
             ? savedQueries.find(q => q.id === activeTab.savedQueryId)
             : { name: activeTab?.name === `Query ${tabCounter - 1}.sql` || activeTab?.name.startsWith('Query ') ? '' : activeTab?.name }
         }
+      />
+
+      {/* Tab Close Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={Boolean(tabToClosePending)}
+        title="Unsaved SQL Changes"
+        message="This query has unsaved changes. If you close it, your changes will be lost."
+        itemName={tabToClosePending?.name}
+        confirmText="Close Query"
+        cancelText="Keep Editing"
+        confirmVariant="danger"
+        onConfirm={() => {
+          if (tabToClosePending) {
+            executeCloseTab(tabToClosePending.id);
+            setTabToClosePending(null);
+          }
+        }}
+        onCancel={() => {
+          setTabToClosePending(null);
+        }}
       />
 
       {/* Connection Modal */}
