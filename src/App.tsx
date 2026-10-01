@@ -131,6 +131,8 @@ function AppContent() {
 
   // Dynamic schema discovery state
   const [tables, setTables] = useState<DiscoveredTable[]>([]);
+  const [schemas, setSchemas] = useState<string[]>([]);
+  const [selectedSchema, setSelectedSchema] = useState<string>('');
   const [relationships, setRelationships] = useState<DatabaseRelationship[]>([]);
   const [tableDetailsCache, setTableDetailsCache] = useState<Record<string, TableDetailsResult>>({});
   const [selectedTable, setSelectedTable] = useState<TableDetailsResult | null>(null);
@@ -589,8 +591,12 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
 
   const loadTables = async () => {
     try {
-      const discovered = await DatabaseApiClient.getTables();
+      const [discovered, discoveredSchemas] = await Promise.all([
+        DatabaseApiClient.getTables().catch(() => []),
+        DatabaseApiClient.getSchemas().catch(() => ['public'])
+      ]);
       setTables(discovered || []);
+      setSchemas(discoveredSchemas || []);
       try {
         const rels = await DatabaseApiClient.getRelationships();
         setRelationships(rels || []);
@@ -599,6 +605,7 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
       }
     } catch {
       setTables([]);
+      setSchemas([]);
     }
   };
 
@@ -650,8 +657,12 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
     setConnection(connInfo);
     setIsRefreshingSchema(true);
     try {
-      const discovered = await DatabaseApiClient.getTables();
+      const [discovered, discSchemas] = await Promise.all([
+        DatabaseApiClient.getTables(),
+        DatabaseApiClient.getSchemas().catch(() => ['public'])
+      ]);
       setTables(discovered);
+      setSchemas(discSchemas);
       setRefreshMessage(`Connected to ${connInfo.database}. Discovered ${discovered.length} tables.`);
       setTimeout(() => setRefreshMessage(null), 4000);
       if (discovered.length > 0) {
@@ -673,6 +684,8 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
       console.error('Error disconnecting:', err);
     } finally {
       setConnection(null);
+      setSchemas([]);
+      setSelectedSchema('');
       setRelationships([]);
       setSelectedTable(null);
       setQueryResult(null);
@@ -701,10 +714,16 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
       setSelectedTable(details);
 
       // Auto-generate clean read-only SELECT template in the editor
-      const qualifiedName =
-        table.schema === 'public' || table.schema === 'imported'
-          ? `"${table.name}"`
-          : `"${table.schema}"."${table.name}"`;
+      let qualifiedName = `"${table.name}"`;
+      if (table.schema === 'imported') {
+        qualifiedName = `"${table.name}"`;
+      } else if (connection?.type === 'mysql') {
+        qualifiedName = table.schema ? `\`${table.schema}\`.\`${table.name}\`` : `\`${table.name}\``;
+      } else if (connection?.type === 'sqlserver') {
+        qualifiedName = table.schema ? `[${table.schema}].[${table.name}]` : `[${table.name}]`;
+      } else {
+        qualifiedName = table.schema ? `"${table.schema}"."${table.name}"` : `"${table.name}"`;
+      }
       setSqlQuery(`SELECT *\nFROM ${qualifiedName}\nLIMIT 50;\n`);
     } catch (err: any) {
       console.error('Failed to inspect table:', err);
@@ -719,8 +738,12 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
 
     setIsRefreshingSchema(true);
     try {
-      const res = await DatabaseApiClient.refreshSchema();
+      const [res, discSchemas] = await Promise.all([
+        DatabaseApiClient.refreshSchema(),
+        DatabaseApiClient.getSchemas().catch(() => ['public'])
+      ]);
       setTables(res.tables);
+      setSchemas(discSchemas);
       setRelationships(res.relationships);
       setRefreshMessage(`Schema updated (${res.tableCount} tables discovered)`);
       setTimeout(() => setRefreshMessage(null), 3500);
@@ -1010,6 +1033,9 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
         <DatabaseExplorer
           connection={connection}
           tables={tables}
+          schemas={schemas}
+          selectedSchema={selectedSchema}
+          onSelectSchema={setSelectedSchema}
           importedDatasets={importedDatasets}
           selectedTable={selectedTable}
           isLoadingTableDetails={isLoadingTableDetails}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Database,
   RefreshCw,
@@ -18,7 +18,8 @@ import {
   Sparkles,
   Wand2,
   Info,
-  Search
+  Search,
+  Filter
 } from 'lucide-react';
 import { SanitizedConnectionInfo, DiscoveredTable, TableDetailsResult } from '../../types/database';
 import { DataPilotLogo } from '../common/DataPilotLogo';
@@ -28,6 +29,9 @@ import { TableDetailsPanel } from './TableDetailsPanel';
 interface DatabaseExplorerProps {
   connection: SanitizedConnectionInfo | null;
   tables: DiscoveredTable[];
+  schemas?: string[];
+  selectedSchema?: string;
+  onSelectSchema?: (schema: string) => void;
   importedDatasets?: ImportedDataset[];
   selectedTable: TableDetailsResult | null;
   isLoadingTableDetails: boolean;
@@ -42,13 +46,14 @@ interface DatabaseExplorerProps {
   onCleanDataset?: (dataset: ImportedDataset) => void;
   onDisconnect: () => void;
   onInsertColumnToQuery: (columnIdentifier: string) => void;
-  selectedSchema?: string;
-  onSelectSchema?: (schema: string) => void;
 }
 
 export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
   connection,
   tables,
+  schemas = [],
+  selectedSchema: controlledSchema,
+  onSelectSchema,
   importedDatasets = [],
   selectedTable,
   isLoadingTableDetails,
@@ -65,20 +70,75 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
   onInsertColumnToQuery
 }) => {
   const [filterQuery, setFilterQuery] = useState('');
+  const [localSchema, setLocalSchema] = useState<string>('');
   const [isDatasetsOpen, setIsDatasetsOpen] = useState(true);
   const [isTablesOpen, setIsTablesOpen] = useState(true);
 
-  const dbTables = tables.filter(t => t.schema !== 'imported');
+  // Synchronize controlled vs uncontrolled schema
+  const activeSchema = controlledSchema !== undefined ? controlledSchema : localSchema;
 
-  const filteredTables = dbTables.filter(t =>
-    t.name.toLowerCase().includes(filterQuery.toLowerCase()) ||
-    t.schema.toLowerCase().includes(filterQuery.toLowerCase())
-  );
+  const handleSchemaChange = (newSchema: string) => {
+    setLocalSchema(newSchema);
+    onSelectSchema?.(newSchema);
+  };
 
-  const filteredDatasets = importedDatasets.filter(d =>
-    d.name.toLowerCase().includes(filterQuery.toLowerCase()) ||
-    d.tableName.toLowerCase().includes(filterQuery.toLowerCase())
-  );
+  const dbTables = useMemo(() => {
+    return tables.filter(t => t.schema !== 'imported');
+  }, [tables]);
+
+  // Dynamically discover all unique non-imported schemas from database and tables
+  const availableSchemas = useMemo(() => {
+    const schemaSet = new Set<string>();
+    if (schemas && Array.isArray(schemas)) {
+      schemas.forEach(s => {
+        if (s && s !== 'imported') schemaSet.add(s);
+      });
+    }
+    dbTables.forEach(t => {
+      if (t.schema && t.schema !== 'imported') {
+        schemaSet.add(t.schema);
+      }
+    });
+
+    return Array.from(schemaSet).sort((a, b) => {
+      if (a === 'public') return -1;
+      if (b === 'public') return 1;
+      return a.localeCompare(b);
+    });
+  }, [schemas, dbTables]);
+
+  // Reset active schema if it's no longer present in available schemas
+  useEffect(() => {
+    if (activeSchema && availableSchemas.length > 0 && !availableSchemas.includes(activeSchema) && activeSchema !== 'ALL') {
+      handleSchemaChange('');
+    }
+  }, [availableSchemas, activeSchema]);
+
+  // Filter tables by schema if a schema is explicitly selected
+  const schemaFilteredTables = useMemo(() => {
+    if (!activeSchema || activeSchema === 'ALL') {
+      return dbTables;
+    }
+    return dbTables.filter(t => t.schema === activeSchema);
+  }, [dbTables, activeSchema]);
+
+  const filteredTables = useMemo(() => {
+    const query = filterQuery.toLowerCase().trim();
+    if (!query) return schemaFilteredTables;
+    return schemaFilteredTables.filter(t =>
+      t.name.toLowerCase().includes(query) ||
+      t.schema.toLowerCase().includes(query)
+    );
+  }, [schemaFilteredTables, filterQuery]);
+
+  const filteredDatasets = useMemo(() => {
+    const query = filterQuery.toLowerCase().trim();
+    if (!query) return importedDatasets;
+    return importedDatasets.filter(d =>
+      d.name.toLowerCase().includes(query) ||
+      d.tableName.toLowerCase().includes(query)
+    );
+  }, [importedDatasets, filterQuery]);
 
   const getFileTypeIcon = (type: string) => {
     switch (type) {
@@ -179,7 +239,7 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
         <div className="flex items-center gap-1.5">
           <Layers className="w-3.5 h-3.5 text-slate-400" />
           <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-            Explorer {isDbConnected && `(${dbTables.length})`}
+            Explorer {isDbConnected && `(${schemaFilteredTables.length})`}
           </span>
         </div>
         <button
@@ -201,6 +261,42 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
         <div className="px-3 py-1.5 bg-emerald-950/40 border-b border-emerald-900/40 text-[11px] text-emerald-300 flex items-center gap-1.5 flex-shrink-0">
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
           <span className="truncate">{refreshMessage}</span>
+        </div>
+      )}
+
+      {/* Dynamic Schema Selector (when database is connected and has schemas) */}
+      {isDbConnected && availableSchemas.length > 0 && (
+        <div className="p-2 border-b border-slate-800/60 bg-slate-900/30 flex-shrink-0">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Schema
+            </span>
+            {activeSchema && activeSchema !== 'ALL' && (
+              <button
+                type="button"
+                onClick={() => handleSchemaChange('')}
+                className="text-[10px] text-emerald-400 hover:text-emerald-300 hover:underline"
+              >
+                All Schemas
+              </button>
+            )}
+          </div>
+          <select
+            value={activeSchema || 'ALL'}
+            onChange={e => handleSchemaChange(e.target.value === 'ALL' ? '' : e.target.value)}
+            className="w-full bg-slate-950 border border-slate-700/80 hover:border-slate-600 rounded-md px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-medium cursor-pointer"
+            aria-label="Select Schema"
+          >
+            <option value="ALL">All Schemas ({dbTables.length})</option>
+            {availableSchemas.map(s => {
+              const count = dbTables.filter(t => t.schema === s).length;
+              return (
+                <option key={s} value={s}>
+                  {s} ({count})
+                </option>
+              );
+            })}
+          </select>
         </div>
       )}
 
@@ -342,11 +438,18 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
             onClick={() => setIsTablesOpen(prev => !prev)}
             className="flex items-center justify-between px-1.5 py-1 mb-1 cursor-pointer hover:bg-slate-800/40 rounded transition-colors"
           >
-            <div className="flex items-center space-x-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              {isTablesOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-              <Database className="w-3 h-3 text-slate-400" />
-              <span>Database Tables {isDbConnected && `(${dbTables.length})`}</span>
+            <div className="flex items-center space-x-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 truncate">
+              {isTablesOpen ? <ChevronDown className="w-3 h-3 flex-shrink-0" /> : <ChevronRight className="w-3 h-3 flex-shrink-0" />}
+              <Database className="w-3 h-3 text-slate-400 flex-shrink-0" />
+              <span className="truncate">
+                Database Tables {isDbConnected && `(${schemaFilteredTables.length})`}
+              </span>
             </div>
+            {activeSchema && activeSchema !== 'ALL' && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-mono flex-shrink-0 truncate max-w-[100px]">
+                {activeSchema}
+              </span>
+            )}
           </div>
 
           {isTablesOpen && (
@@ -371,14 +474,15 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
                   <span>Connect Database</span>
                 </button>
               </div>
-            ) : dbTables.length === 0 ? (
+            ) : schemaFilteredTables.length === 0 ? (
               <div className="p-3 text-center text-slate-500 text-xs">
-                No tables found in schema
+                No tables found {activeSchema && activeSchema !== 'ALL' ? `in schema "${activeSchema}"` : 'in schema'}
               </div>
             ) : (
               <div className="space-y-0.5">
                 {filteredTables.map(table => {
                   const isSelected = selectedTable?.name === table.name && selectedTable?.schema === table.schema;
+                  const isShowingAllSchemas = !activeSchema || activeSchema === 'ALL';
 
                   return (
                     <div
@@ -390,17 +494,24 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
                           : 'border-transparent text-slate-300 hover:bg-slate-800/80 hover:text-white'
                       }`}
                     >
-                      <div className="flex items-center space-x-2 truncate">
+                      <div className="flex items-center space-x-2 truncate min-w-0">
                         {table.type === 'VIEW' ? (
                           <span title="View" className="flex items-center"><Eye className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" /></span>
                         ) : (
                           <span title="Table" className="flex items-center"><TableIcon className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" /></span>
                         )}
-                        <span className="truncate font-mono text-xs">{table.name}</span>
+                        <div className="truncate flex flex-col min-w-0">
+                          <span className="truncate font-mono text-xs text-slate-200">{table.name}</span>
+                          {isShowingAllSchemas && (
+                            <span className="text-[10px] font-mono text-slate-500 truncate">
+                              {table.schema}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex items-center space-x-1.5 flex-shrink-0 text-[10px] font-mono text-slate-500">
-                        {table.schema !== 'public' && (
+                        {!isShowingAllSchemas && table.schema !== 'public' && (
                           <span className="text-slate-500">{table.schema}</span>
                         )}
                         <ChevronRight className="w-3 h-3 text-slate-600" />

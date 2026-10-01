@@ -241,10 +241,15 @@ export class DashboardService {
     const original = d.widgets[originalIdx];
 
     const newWidgetId = `widget-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const duplicatedTitle = `${original.title} (Copy)`;
     const duplicated: DashboardWidget = {
       ...JSON.parse(JSON.stringify(original)),
       id: newWidgetId,
-      title: `${original.title} (Copy)`,
+      title: duplicatedTitle,
+      chartConfig: {
+        ...original.chartConfig,
+        title: duplicatedTitle
+      },
       position: {
         ...original.position,
         order: original.position.order + 1

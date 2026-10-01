@@ -423,6 +423,21 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
     }
   };
 
+  const handleUpdateWidgetTitle = (widgetId: string, newTitle: string) => {
+    if (!currentDashboard || !newTitle.trim()) return;
+    const widget = currentDashboard.widgets.find(w => w.id === widgetId);
+    if (!widget) return;
+    const trimmedTitle = newTitle.trim();
+    DashboardService.updateWidget(currentDashboard.id, widgetId, {
+      title: trimmedTitle,
+      chartConfig: {
+        ...widget.chartConfig,
+        title: trimmedTitle
+      }
+    });
+    setDashboards(DashboardService.getDashboards());
+  };
+
   const handleRemoveWidget = (widgetId: string) => {
     if (!currentDashboard) return;
     DashboardService.removeWidget(currentDashboard.id, widgetId);
@@ -1043,6 +1058,7 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
                   onResizeWidget={handleResizeWidget}
                   onResizeCustom={handleResizeCustom}
                   onDuplicateWidget={handleDuplicateWidget}
+                  onUpdateTitle={handleUpdateWidgetTitle}
                   onMoveWidget={handleMoveWidget}
                   onDragStart={handleDragStart}
                   onDragOver={handleDragOver}

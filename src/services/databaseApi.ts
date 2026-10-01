@@ -86,6 +86,14 @@ export class DatabaseApiClient {
     return this.handleResponse(res);
   }
 
+  public static async getSchemas(): Promise<string[]> {
+    const res = await fetch('/api/database/schemas', {
+      headers: this.getHeaders()
+    });
+    const data = await this.handleResponse<{ success: boolean; schemas: string[]; count: number }>(res);
+    return data.schemas;
+  }
+
   public static async getTables(schema?: string): Promise<DiscoveredTable[]> {
     const url = schema ? `/api/database/tables?schema=${encodeURIComponent(schema)}` : '/api/database/tables';
     const res = await fetch(url, {

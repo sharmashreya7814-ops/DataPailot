@@ -16,6 +16,38 @@ const connectionManager = ConnectionManager.getInstance();
 const unifiedDataLayer = UnifiedDataLayer.getInstance();
 
 /**
+ * GET /api/database/schemas
+ * Lists all available schemas from the connected database
+ */
+schemaRoutes.get('/schemas', async (req: Request, res: Response) => {
+  try {
+    const sessionId = getSessionId(req, res);
+    const adapter = connectionManager.getAdapter(sessionId);
+
+    if (!adapter || !adapter.isConnected()) {
+      res.json({
+        success: true,
+        schemas: ['public'],
+        count: 1
+      });
+      return;
+    }
+
+    const schemas = await adapter.listSchemas();
+    const uniqueSchemas = Array.from(new Set(schemas)).filter(Boolean);
+
+    res.json({
+      success: true,
+      schemas: uniqueSchemas.length > 0 ? uniqueSchemas : ['public'],
+      count: uniqueSchemas.length || 1
+    });
+  } catch (err: any) {
+    Logger.error('Failed to list schemas', err);
+    ApiResponse.error(res, 500, 'SCHEMA_LISTING_FAILED', err.message || 'Failed to list schemas');
+  }
+});
+
+/**
  * GET /api/database/tables
  * Discovers all tables from the connected database schema and imported datasets
  */

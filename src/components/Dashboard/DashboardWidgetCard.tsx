@@ -22,7 +22,9 @@ import {
   Image as ImageIcon,
   Sliders,
   Filter,
-  GripVertical
+  GripVertical,
+  Edit3,
+  X
 } from 'lucide-react';
 import { DashboardWidget, WidgetColSpan, WidgetPreset } from '../../types/dashboard';
 import { QueryResult } from '../../types/database';
@@ -61,6 +63,7 @@ interface DashboardWidgetCardProps {
   onResizeWidget?: (widgetId: string, colSpan: WidgetColSpan) => void;
   onResizeCustom?: (widgetId: string, size: { colSpan: number; height?: number; preset?: WidgetPreset }) => void;
   onDuplicateWidget?: (widgetId: string) => void;
+  onUpdateTitle?: (widgetId: string, newTitle: string) => void;
   onMoveWidget?: (widgetId: string, direction: 'prev' | 'next') => void;
   onEditQuery?: (sql: string) => void;
   onRepairWidget?: (widget: DashboardWidget) => void;
@@ -86,6 +89,7 @@ export const DashboardWidgetCard: React.FC<DashboardWidgetCardProps> = ({
   onResizeWidget,
   onResizeCustom,
   onDuplicateWidget,
+  onUpdateTitle,
   onMoveWidget,
   onEditQuery,
   onRepairWidget,
@@ -105,6 +109,12 @@ export const DashboardWidgetCard: React.FC<DashboardWidgetCardProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isEditingTitleModal, setIsEditingTitleModal] = useState(false);
+  const [editTitleInput, setEditTitleInput] = useState(widget.title);
+
+  useEffect(() => {
+    setEditTitleInput(widget.title);
+  }, [widget.title]);
 
   // Resize drag state
   const [isResizing, setIsResizing] = useState(false);
@@ -469,14 +479,41 @@ export const DashboardWidgetCard: React.FC<DashboardWidgetCardProps> = ({
               </span>
             )}
             <span className="w-2 h-2 rounded-full bg-emerald-500/80 flex-shrink-0 print:bg-emerald-600" />
-            <div className="truncate">
-              <h4 className="text-xs font-semibold text-slate-100 truncate tracking-wide print:text-slate-900">
-                {widget.title}
-              </h4>
-              {widget.description && (
-                <p className="text-[11px] text-slate-400 truncate print:text-slate-600">
-                  {widget.description}
-                </p>
+            <div className="truncate group/title flex items-center space-x-1.5">
+              <div className="truncate">
+                <h4
+                  className="text-xs font-semibold text-slate-100 truncate tracking-wide print:text-slate-900 cursor-pointer hover:text-emerald-400 transition-colors"
+                  onClick={e => {
+                    e.stopPropagation();
+                    if (!isPresentationMode) {
+                      setEditTitleInput(widget.title);
+                      setIsEditingTitleModal(true);
+                    }
+                  }}
+                  title="Click to rename widget"
+                >
+                  {widget.title}
+                </h4>
+                {widget.description && (
+                  <p className="text-[11px] text-slate-400 truncate print:text-slate-600">
+                    {widget.description}
+                  </p>
+                )}
+              </div>
+              {!isPresentationMode && (
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setEditTitleInput(widget.title);
+                    setIsEditingTitleModal(true);
+                  }}
+                  className="opacity-0 group-hover/title:opacity-100 p-0.5 text-slate-400 hover:text-emerald-400 rounded transition-opacity"
+                  title="Rename widget"
+                  aria-label="Rename widget"
+                >
+                  <Edit3 className="w-3 h-3" />
+                </button>
               )}
             </div>
 
@@ -615,6 +652,19 @@ export const DashboardWidgetCard: React.FC<DashboardWidgetCardProps> = ({
 
                     {/* Widget Operations */}
                     <div className="py-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditTitleInput(widget.title);
+                          setIsEditingTitleModal(true);
+                          setIsMenuOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-800 flex items-center space-x-2"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Rename Widget</span>
+                      </button>
+
                       {onDuplicateWidget && (
                         <button
                           type="button"
@@ -624,7 +674,7 @@ export const DashboardWidgetCard: React.FC<DashboardWidgetCardProps> = ({
                           }}
                           className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-800 flex items-center space-x-2"
                         >
-                          <Copy className="w-3.5 h-3.5 text-emerald-400" />
+                          <Copy className="w-3.5 h-3.5 text-indigo-400" />
                           <span>Duplicate Widget</span>
                         </button>
                       )}
@@ -891,6 +941,92 @@ export const DashboardWidgetCard: React.FC<DashboardWidgetCardProps> = ({
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Edit Widget Title Modal */}
+      {isEditingTitleModal && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={e => {
+            e.stopPropagation();
+            setEditTitleInput(widget.title);
+            setIsEditingTitleModal(false);
+          }}
+        >
+          <div
+            className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <Edit3 className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-bold text-white">Edit Widget Title</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditTitleInput(widget.title);
+                  setIsEditingTitleModal(false);
+                }}
+                className="p-1 text-slate-400 hover:text-white rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300">Widget Title</label>
+              <input
+                type="text"
+                value={editTitleInput}
+                onChange={e => setEditTitleInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    const trimmed = editTitleInput.trim();
+                    if (trimmed) {
+                      onUpdateTitle?.(widget.id, trimmed);
+                      setIsEditingTitleModal(false);
+                    }
+                  }
+                  if (e.key === 'Escape') {
+                    setEditTitleInput(widget.title);
+                    setIsEditingTitleModal(false);
+                  }
+                }}
+                autoFocus
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-medium"
+                placeholder="Enter widget title..."
+              />
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditTitleInput(widget.title);
+                  setIsEditingTitleModal(false);
+                }}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const trimmed = editTitleInput.trim();
+                  if (trimmed) {
+                    onUpdateTitle?.(widget.id, trimmed);
+                    setIsEditingTitleModal(false);
+                  }
+                }}
+                disabled={!editTitleInput.trim()}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-medium transition-colors shadow-lg shadow-emerald-950"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

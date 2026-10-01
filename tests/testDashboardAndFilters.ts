@@ -465,5 +465,92 @@ export function runDashboardAndFilterTests(): { name: string; passed: boolean; e
     assert('PHASE-9-CROSSFILTER: Error testing cross-filter compatibility', false, err.message);
   }
 
+  // --- PHASE 10: WIDGET TITLE RENAME & MULTI-SCHEMA QUALIFICATION TESTS ---
+  try {
+    const testDashId = `dash-rename-test-${Date.now()}`;
+    const initialDash: Dashboard = {
+      id: testDashId,
+      name: 'Rename & Schema Test Dash',
+      widgets: [
+        {
+          id: 'w_rename_1',
+          title: 'Original Title',
+          chartType: 'bar',
+          queryRef: {
+            type: 'raw_sql',
+            sql: 'SELECT * FROM analytics_practice.orders LIMIT 10;',
+            sourceTable: 'analytics_practice.orders',
+            referencedColumns: ['order_id', 'total']
+          },
+          chartConfig: {
+            chartType: 'bar',
+            xAxis: 'order_id',
+            yAxis: 'total',
+            secondaryMeasures: [],
+            aggregation: 'none',
+            sortOrder: 'none',
+            sortBy: 'x',
+            limit: 'all',
+            title: 'Original Title',
+            showLegend: true,
+            showDataLabels: false,
+            showGrid: true,
+            binCount: 10,
+            treatNullAsZero: true
+          },
+          size: { colSpan: 6 },
+          position: { order: 0 }
+        }
+      ],
+      filters: [],
+      layout: { columns: 12, gap: 'md', theme: 'dark' },
+      autoRefreshInterval: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    DashboardService.saveDashboard(initialDash);
+
+    // Test 1: Renaming widget updates both title and chartConfig.title and persists
+    const updated = DashboardService.updateWidget(testDashId, 'w_rename_1', {
+      title: 'Renamed Q3 Orders',
+      chartConfig: {
+        ...initialDash.widgets[0].chartConfig,
+        title: 'Renamed Q3 Orders'
+      }
+    });
+
+    assert('WIDGET-RENAME-1: Updating widget title succeeds and updates widget.title',
+      updated !== null && updated.widgets[0].title === 'Renamed Q3 Orders'
+    );
+
+    assert('WIDGET-RENAME-2: Updating widget title preserves query, sizing, and position',
+      updated !== null &&
+      updated.widgets[0].queryRef.sql === 'SELECT * FROM analytics_practice.orders LIMIT 10;' &&
+      updated.widgets[0].size.colSpan === 6 &&
+      updated.widgets[0].position.order === 0
+    );
+
+    // Test 2: Verify persistence from fresh reload
+    const reloaded = DashboardService.getDashboardById(testDashId);
+    assert('WIDGET-RENAME-3: Updated widget title persists in dashboard storage across reloads',
+      reloaded !== null && reloaded.widgets[0].title === 'Renamed Q3 Orders'
+    );
+
+    // Test 3: Duplicated widget receives distinct title and state
+    const dupResult = DashboardService.duplicateWidget(testDashId, 'w_rename_1');
+    assert('WIDGET-DUP-1: Duplicating widget produces a new distinct widget ID and copy title',
+      dupResult !== null &&
+      dupResult.widget.id !== 'w_rename_1' &&
+      dupResult.widget.title === 'Renamed Q3 Orders (Copy)' &&
+      dupResult.widget.chartConfig.title === 'Renamed Q3 Orders (Copy)'
+    );
+
+    // Clean up test dashboard
+    DashboardService.deleteDashboard(testDashId);
+  } catch (err: any) {
+    assert('PHASE-10-WIDGET-RENAME: Error in widget rename tests', false, err.message);
+  }
+
   return results;
 }
