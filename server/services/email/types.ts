@@ -6,7 +6,7 @@ export interface EmailDeliveryResult {
   emailType: EmailType;
   recipientDomain: string;
   recipientMasked: string;
-  deliveryMode: 'real' | 'development_fallback';
+  deliveryMode: 'real' | 'development_fallback' | 'optional';
   messageId?: string;
   error?: string;
   timestamp: string;

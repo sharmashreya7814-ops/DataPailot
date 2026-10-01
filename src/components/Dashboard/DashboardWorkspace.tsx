@@ -33,7 +33,10 @@ import {
   Dashboard,
   DashboardWidget,
   DashboardFilter,
-  DashboardInsightItem
+  DashboardInsightItem,
+  WidgetPreset,
+  WidgetColSpan,
+  WidgetSize
 } from '../../types/dashboard';
 import { DiscoveredTable, QueryResult } from '../../types/database';
 import { DashboardService } from '../../services/dashboardService';
@@ -374,7 +377,7 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
   };
 
   // Widget Actions: Resize, Duplicate, Remove, Move, Drag
-  const handleResizeWidget = (widgetId: string, colSpan: 3 | 4 | 6 | 8 | 12) => {
+  const handleResizeWidget = (widgetId: string, colSpan: WidgetColSpan) => {
     if (!currentDashboard) return;
     const widget = currentDashboard.widgets.find(w => w.id === widgetId);
     if (!widget) return;
@@ -386,15 +389,24 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
 
   const handleResizeCustom = (
     widgetId: string,
-    size: { colSpan: number; height?: number; preset?: string }
+    size: { colSpan: number; height?: number; preset?: WidgetPreset }
   ) => {
     if (!currentDashboard) return;
     const widget = currentDashboard.widgets.find(w => w.id === widgetId);
     if (!widget) return;
-    const colSpan = Math.max(3, Math.min(12, size.colSpan)) as any;
+    const rawSpan = Math.max(3, Math.min(12, size.colSpan));
+    const validColSpans: WidgetColSpan[] = [3, 4, 6, 8, 9, 12];
+    const colSpan = validColSpans.reduce((prev, curr) =>
+      Math.abs(curr - rawSpan) < Math.abs(prev - rawSpan) ? curr : prev
+    );
     const height = size.height ? Math.max(220, Math.min(800, size.height)) : widget.size.height;
     DashboardService.updateWidget(currentDashboard.id, widgetId, {
-      size: { ...widget.size, colSpan, height, preset: size.preset as any }
+      size: {
+        ...widget.size,
+        colSpan,
+        height,
+        ...(size.preset ? { preset: size.preset } : {})
+      }
     });
     setDashboards(DashboardService.getDashboards());
   };
@@ -795,7 +807,7 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
           {/* Refresh Dashboard Button */}
           <button
             type="button"
-            onClick={handleRefreshAll}
+            onClick={() => handleRefreshAll()}
             disabled={isRefreshingAll || isSnapshotMode}
             className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 hover:text-white rounded-lg text-xs font-medium border border-slate-700/60 transition-colors"
             title="Refresh all queries across this dashboard"

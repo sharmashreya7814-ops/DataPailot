@@ -31,9 +31,13 @@ export interface WidgetQueryReference {
   datasetId?: string;
 }
 
+export type WidgetPreset = 'small' | 'medium' | 'large' | 'full' | 'reset';
+export type WidgetColSpan = 3 | 4 | 6 | 8 | 9 | 12;
+
 export interface WidgetSize {
-  colSpan: 3 | 4 | 6 | 8 | 12; // 12-column grid layout
+  colSpan: WidgetColSpan; // 12-column grid layout (3: Small, 6: Medium, 9: Large, 12: Full Width)
   height?: number; // pixel height, e.g. 280, 340, 420
+  preset?: WidgetPreset;
 }
 
 export interface WidgetPosition {

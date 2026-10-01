@@ -140,8 +140,7 @@ export class DashboardExportService {
       const serializer = new XMLSerializer();
       const svgString = serializer.serializeToString(svgClone);
       const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-      const URL = window.URL || window.webkitURL || window;
-      const blobURL = URL.createObjectURL(svgBlob);
+      const blobURL = window.URL.createObjectURL(svgBlob);
 
       const image = new Image();
       image.onload = () => {
@@ -159,7 +158,7 @@ export class DashboardExportService {
             this.triggerDownload(pngBlob, filename);
           }
         }, 'image/png');
-        URL.revokeObjectURL(blobURL);
+        window.URL.revokeObjectURL(blobURL);
       };
       image.src = blobURL;
     } catch (err) {

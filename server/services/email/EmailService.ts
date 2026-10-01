@@ -12,6 +12,7 @@ import { ResendProvider } from './providers/ResendProvider';
 import { SmtpProvider } from './providers/SmtpProvider';
 import { DevelopmentFallbackProvider } from './providers/DevelopmentFallbackProvider';
 import { Logger } from '../../utils/logger';
+import { isEmailVerificationEnabled } from '../../middleware/authMiddleware';
 
 export class EmailService {
   private static instance: EmailService | null = null;
@@ -100,6 +101,20 @@ export class EmailService {
     const recipientDomain = extractDomain(options.to);
     const recipientMasked = maskEmail(options.to);
     const emailType: EmailType = 'VERIFICATION';
+
+    // When email verification is disabled via feature flag, real email delivery is NOT required
+    if (!isEmailVerificationEnabled()) {
+      return {
+        success: true,
+        provider: this.provider.name || 'verification_disabled',
+        emailType,
+        recipientDomain,
+        recipientMasked,
+        deliveryMode: 'optional',
+        messageId: `opt_verif_${Date.now()}`,
+        timestamp: new Date().toISOString()
+      };
+    }
 
     // In production, require a real configured provider
     if (this.isProduction && (!this.provider.isConfigured || this.provider.name === 'development_fallback')) {

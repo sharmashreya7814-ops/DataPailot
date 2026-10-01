@@ -413,7 +413,7 @@ schemaRoutes.get('/filter-values', async (req: Request, res: Response) => {
 
     res.json({ success: true, values: [], column: colVal.cleanName, table: null });
   } catch (err: any) {
-    Logger.error('Failed to retrieve distinct filter values', err, { sessionId, column: columnParam });
+    Logger.error('Failed to retrieve distinct filter values', err, { sessionId, column: parsedColumn });
     ApiResponse.error(res, 500, 'FILTER_VALUES_FAILED', err.message || 'Failed to retrieve filter values');
   }
 });

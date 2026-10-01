@@ -163,6 +163,8 @@ export async function runRealEmailDeliveryTests() {
   const mockProvider = new MockTestingProvider();
   const testEmailService = new EmailService(mockProvider);
 
+  const origFlagFor10 = process.env.ENABLE_EMAIL_VERIFICATION;
+  process.env.ENABLE_EMAIL_VERIFICATION = 'true';
   const testVerifyResult = await testEmailService.sendVerificationEmail({
     to: 'new.member@enterprise.com',
     name: 'New Member',
@@ -180,6 +182,20 @@ export async function runRealEmailDeliveryTests() {
     mockProvider.lastPayload.html.includes('mocktoken123'),
     'EmailService verification dispatch failed'
   );
+
+  // MODE A check: When verification is disabled, delivery is optional
+  process.env.ENABLE_EMAIL_VERIFICATION = 'false';
+  const testVerifyResultDisabled = await testEmailService.sendVerificationEmail({
+    to: 'new.member@enterprise.com',
+    name: 'New Member',
+    verificationUrl: 'https://datapilot.io/api/auth/verify-email?token=mocktoken123'
+  });
+  assertTest(
+    '10b. EmailService treats verification email as optional when ENABLE_EMAIL_VERIFICATION=false',
+    testVerifyResultDisabled.success === true && testVerifyResultDisabled.deliveryMode === 'optional',
+    'Disabled verification email check failed'
+  );
+  if (origFlagFor10 !== undefined) process.env.ENABLE_EMAIL_VERIFICATION = origFlagFor10; else delete process.env.ENABLE_EMAIL_VERIFICATION;
 
   const testResetResult = await testEmailService.sendPasswordResetEmail({
     to: 'recovery@enterprise.com',
@@ -208,7 +224,9 @@ export async function runRealEmailDeliveryTests() {
   }
 
   const origNodeEnv = process.env.NODE_ENV;
+  const origFlagFor12 = process.env.ENABLE_EMAIL_VERIFICATION;
   process.env.NODE_ENV = 'production';
+  process.env.ENABLE_EMAIL_VERIFICATION = 'true'; // MODE B: enabled
   const prodEmailService = new EmailService(new UnconfiguredMockProvider());
   const prodResult = await prodEmailService.sendVerificationEmail({
     to: 'prod.user@datapilot.io',
@@ -224,7 +242,24 @@ export async function runRealEmailDeliveryTests() {
     !prodResult.error.includes('secret'),
     'Production unconfigured failure safety failed'
   );
+
+  // MODE A: In production with ENABLE_EMAIL_VERIFICATION=false, real email delivery is NOT required
+  process.env.ENABLE_EMAIL_VERIFICATION = 'false';
+  const prodResultDisabled = await prodEmailService.sendVerificationEmail({
+    to: 'prod.user@datapilot.io',
+    name: 'Prod User',
+    verificationUrl: 'https://datapilot.io/api/auth/verify-email?token=prodtoken'
+  });
+
+  assertTest(
+    '12b. In production with ENABLE_EMAIL_VERIFICATION=false, verification email delivery is not required',
+    prodResultDisabled.success === true &&
+    prodResultDisabled.deliveryMode === 'optional',
+    'Disabled mode in production should not require email delivery'
+  );
+
   process.env.NODE_ENV = origNodeEnv;
+  if (origFlagFor12 !== undefined) process.env.ENABLE_EMAIL_VERIFICATION = origFlagFor12; else delete process.env.ENABLE_EMAIL_VERIFICATION;
 
   // 10. Log sanitization: tokens, API keys, passwords, secrets are never logged
   const loggedEntries: any[] = [];

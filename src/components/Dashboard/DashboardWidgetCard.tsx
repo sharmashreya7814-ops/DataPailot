@@ -423,10 +423,9 @@ export const DashboardWidgetCard: React.FC<DashboardWidgetCardProps> = ({
         <div className="px-3.5 py-2.5 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/40 select-none print:bg-white print:border-slate-200">
           <div className="flex items-center space-x-2 min-w-0 pr-2">
             {!isPresentationMode && (
-              <GripVertical
-                className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 cursor-grab active:cursor-grabbing flex-shrink-0"
-                title="Drag to reorder widget"
-              />
+              <span title="Drag to reorder widget">
+                <GripVertical className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 cursor-grab active:cursor-grabbing flex-shrink-0" />
+              </span>
             )}
             <span className="w-2 h-2 rounded-full bg-emerald-500/80 flex-shrink-0 print:bg-emerald-600" />
             <div className="truncate">
