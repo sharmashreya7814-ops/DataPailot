@@ -151,6 +151,9 @@ function AppContent() {
   // Performance Analyzer State
   const [isPerformanceModalOpen, setIsPerformanceModalOpen] = useState(false);
 
+  // Analysis Studio Query Results Collapsed State
+  const [isAnalysisResultsCollapsed, setIsAnalysisResultsCollapsed] = useState(false);
+
   // Active dataset computation
   const activeDataset = useMemo(() => {
     if (activeDatasetId) {
@@ -1122,7 +1125,7 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
               />
             ) : activeWorkspaceView === 'analysis' ? (
               <div className="flex-1 flex flex-col h-full overflow-hidden">
-                <div className={`${queryResult ? 'h-3/5' : 'h-full'} flex flex-col overflow-hidden`}>
+                <div className={`${queryResult ? (isAnalysisResultsCollapsed ? 'flex-1 min-h-0' : 'h-3/5 min-h-0') : 'h-full'} flex flex-col overflow-hidden transition-all duration-200`}>
                   <AnalysisStudio
                     connectionType={connection?.type || 'postgresql'}
                     selectedTable={
@@ -1149,7 +1152,10 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
 
                 {/* Query Results visible if an analysis query was executed */}
                 {queryResult && (
-                  <div className="h-2/5 min-h-[180px] flex flex-col border-t border-slate-800">
+                  <div
+                    id="analysis-query-results-panel"
+                    className={`${isAnalysisResultsCollapsed ? 'h-10 min-h-[40px] max-h-[40px]' : 'h-2/5 min-h-[180px]'} flex flex-col border-t border-slate-800 transition-all duration-200 overflow-hidden flex-shrink-0`}
+                  >
                     <QueryResults
                       result={queryResult}
                       isRunning={isRunningQuery}
@@ -1159,6 +1165,9 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
                       onNavigateToVisualization={() => setActiveWorkspaceView('visualization')}
                       onAddToDashboard={handleAddToDashboardFromResults}
                       sourceName={selectedTable?.name}
+                      isCollapsible={true}
+                      isCollapsed={isAnalysisResultsCollapsed}
+                      onToggleCollapse={() => setIsAnalysisResultsCollapsed(prev => !prev)}
                     />
                   </div>
                 )}

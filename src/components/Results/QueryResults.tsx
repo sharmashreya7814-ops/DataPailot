@@ -18,6 +18,8 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Maximize2,
   Minimize2
 } from 'lucide-react';
@@ -33,6 +35,9 @@ interface QueryResultsProps {
   onNavigateToVisualization?: () => void;
   onAddToDashboard?: (result: QueryExecutionResult) => void;
   sourceName?: string;
+  isCollapsible?: boolean;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export const QueryResults: React.FC<QueryResultsProps> = ({
@@ -43,7 +48,10 @@ export const QueryResults: React.FC<QueryResultsProps> = ({
   onFixSqlError,
   onNavigateToVisualization,
   onAddToDashboard,
-  sourceName
+  sourceName,
+  isCollapsible,
+  isCollapsed = false,
+  onToggleCollapse
 }) => {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -342,7 +350,37 @@ export const QueryResults: React.FC<QueryResultsProps> = ({
             </div>
           </div>
         )}
+
+        {/* Toggle Collapse Button for Analysis View */}
+        {isCollapsible && onToggleCollapse && (
+          <div className="flex items-center ml-auto">
+            <button
+              id="btn-toggle-query-results"
+              type="button"
+              onClick={onToggleCollapse}
+              aria-expanded={!isCollapsed}
+              aria-controls="query-results-content"
+              title={isCollapsed ? 'Show Results' : 'Hide Results'}
+              className="flex items-center space-x-1.5 px-2.5 py-1 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded border border-slate-700 transition-colors shadow-xs"
+            >
+              {isCollapsed ? (
+                <>
+                  <ChevronUp className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Show Results</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Hide Results</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
+
+      {!isCollapsed && (
+        <div id="query-results-content" className="flex-1 flex flex-col min-h-0 overflow-hidden">
 
       {/* Excel Export Error Alert Banner */}
       {exportError && (
@@ -606,6 +644,8 @@ export const QueryResults: React.FC<QueryResultsProps> = ({
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
+        </div>
+      )}
         </div>
       )}
     </div>

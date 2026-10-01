@@ -310,5 +310,43 @@ export async function runSchemaSyncAndSavedConnectionsTests(): Promise<TestResul
     loadingComponentFile.includes('This may take a few seconds')
   );
 
+  // ==========================================
+  // 5. ANALYSIS TOOLKIT COLLAPSIBLE QUERY RESULTS
+  // ==========================================
+  const queryResultsFile = fs.readFileSync(
+    path.join(process.cwd(), 'src', 'components', 'Results', 'QueryResults.tsx'),
+    'utf8'
+  );
+  record(
+    '36. QueryResults supports isCollapsible and isCollapsed props with toggle button',
+    queryResultsFile.includes('isCollapsible') &&
+    queryResultsFile.includes('isCollapsed') &&
+    queryResultsFile.includes('btn-toggle-query-results')
+  );
+  record(
+    '37. QueryResults displays Hide Results and Show Results with Chevron icons',
+    queryResultsFile.includes('Hide Results') &&
+    queryResultsFile.includes('Show Results') &&
+    queryResultsFile.includes('ChevronDown') &&
+    queryResultsFile.includes('ChevronUp')
+  );
+  record(
+    '38. QueryResults toggle includes accessibility aria-expanded and aria-controls attributes',
+    queryResultsFile.includes('aria-expanded={!isCollapsed}') &&
+    queryResultsFile.includes('aria-controls="query-results-content"')
+  );
+
+  const appTsx = fs.readFileSync(path.join(process.cwd(), 'src', 'App.tsx'), 'utf8');
+  record(
+    '39. App.tsx provides isAnalysisResultsCollapsed state and collapses QueryResults in Analysis view',
+    appTsx.includes('isAnalysisResultsCollapsed') &&
+    appTsx.includes('isCollapsible={true}') &&
+    appTsx.includes('analysis-query-results-panel')
+  );
+  record(
+    '40. AnalysisStudio layout transitions smoothly when QueryResults panel is toggled',
+    appTsx.includes('transition-all duration-200')
+  );
+
   return results;
 }
