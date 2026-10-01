@@ -289,11 +289,25 @@ export function runDashboardAndFilterTests(): { name: string; passed: boolean; e
       dupRes?.dashboard.widgets.length === 3
     );
 
-    // 2. Reorder Widgets
+    // 2. Reorder Widgets & Verify Persistence
     const reorderedIds = [dupRes!.widget.id, 'w_orig_2', 'w_orig_1'];
     const reorderRes = DashboardService.reorderWidgets('dash_test_1', reorderedIds);
     assert('REORDER-1: Widgets reordered according to custom order array',
       Boolean(reorderRes && reorderRes.widgets[0].id === dupRes!.widget.id && reorderRes.widgets[1].id === 'w_orig_2')
+    );
+
+    // Verify order persistence on reload/reopening
+    const reloadedDash = DashboardService.getDashboardById('dash_test_1');
+    assert('REORDER-2: Reordered widget positions persist across dashboard retrieval',
+      Boolean(
+        reloadedDash &&
+        reloadedDash.widgets[0].id === dupRes!.widget.id &&
+        reloadedDash.widgets[0].position.order === 0 &&
+        reloadedDash.widgets[1].id === 'w_orig_2' &&
+        reloadedDash.widgets[1].position.order === 1 &&
+        reloadedDash.widgets[2].id === 'w_orig_1' &&
+        reloadedDash.widgets[2].position.order === 2
+      )
     );
 
     // 3. Widget Size Update & Presets

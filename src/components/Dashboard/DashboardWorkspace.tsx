@@ -466,14 +466,32 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
   const handleDragStart = (e: React.DragEvent, widgetId: string) => {
     setDraggedWidgetId(widgetId);
     e.dataTransfer.setData('text/plain', widgetId);
+    e.dataTransfer.setData('application/json', JSON.stringify({ widgetId }));
     e.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDragOver = (e: React.DragEvent, targetWidgetId: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    if (dragOverWidgetId !== targetWidgetId) {
+    if (draggedWidgetId && draggedWidgetId !== targetWidgetId && dragOverWidgetId !== targetWidgetId) {
       setDragOverWidgetId(targetWidgetId);
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent, targetWidgetId: string) => {
+    e.preventDefault();
+    if (draggedWidgetId && draggedWidgetId !== targetWidgetId) {
+      setDragOverWidgetId(targetWidgetId);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent, targetWidgetId: string) => {
+    e.preventDefault();
+    const related = e.relatedTarget as HTMLElement | null;
+    if (!related || !related.closest(`[data-widget-id="${targetWidgetId}"]`)) {
+      if (dragOverWidgetId === targetWidgetId) {
+        setDragOverWidgetId(null);
+      }
     }
   };
 
@@ -489,11 +507,14 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
     const targetIdx = widgetIds.indexOf(targetWidgetId);
     if (sourceIdx < 0 || targetIdx < 0) return;
 
-    widgetIds.splice(sourceIdx, 1);
-    widgetIds.splice(targetIdx, 0, sourceId);
+    const updatedIds = [...widgetIds];
+    const [movedId] = updatedIds.splice(sourceIdx, 1);
+    updatedIds.splice(targetIdx, 0, movedId);
 
-    DashboardService.reorderWidgets(currentDashboard.id, widgetIds);
-    setDashboards(DashboardService.getDashboards());
+    const reordered = DashboardService.reorderWidgets(currentDashboard.id, updatedIds);
+    if (reordered) {
+      setDashboards(DashboardService.getDashboards());
+    }
   };
 
   const handleDragEnd = () => {
@@ -1015,6 +1036,8 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
                   widget={widget}
                   result={widgetRes}
                   isLoading={refreshingWidgets.has(widget.id) || isRefreshingAll}
+                  isDragging={draggedWidgetId === widget.id}
+                  isDraggedOver={dragOverWidgetId === widget.id && draggedWidgetId !== widget.id}
                   onRefreshWidget={handleRefreshWidget}
                   onRemoveWidget={handleRemoveWidget}
                   onResizeWidget={handleResizeWidget}
@@ -1023,9 +1046,10 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
                   onMoveWidget={handleMoveWidget}
                   onDragStart={handleDragStart}
                   onDragOver={handleDragOver}
+                  onDragEnter={handleDragEnter}
+                  onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   onDragEnd={handleDragEnd}
-                  isDraggedOver={dragOverWidgetId === widget.id}
                   filterCompatibility={compInfo}
                   onEditQuery={sql => onNavigateToSqlEditor(sql)}
                   onRepairWidget={() => onNavigateToSqlEditor(widget.queryRef.sql)}

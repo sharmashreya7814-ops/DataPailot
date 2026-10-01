@@ -24,7 +24,7 @@ import {
   Filter,
   GripVertical
 } from 'lucide-react';
-import { DashboardWidget } from '../../types/dashboard';
+import { DashboardWidget, WidgetColSpan, WidgetPreset } from '../../types/dashboard';
 import { QueryResult } from '../../types/database';
 import { ColumnTypeDetector } from '../../services/columnTypeDetector';
 import { VisualizationDataProcessor } from '../../services/visualizationDataProcessor';
@@ -58,8 +58,8 @@ interface DashboardWidgetCardProps {
   isLoading?: boolean;
   onRefreshWidget?: (widgetId: string) => void;
   onRemoveWidget?: (widgetId: string) => void;
-  onResizeWidget?: (widgetId: string, colSpan: 3 | 4 | 6 | 8 | 12) => void;
-  onResizeCustom?: (widgetId: string, size: { colSpan: number; height?: number; preset?: string }) => void;
+  onResizeWidget?: (widgetId: string, colSpan: WidgetColSpan) => void;
+  onResizeCustom?: (widgetId: string, size: { colSpan: number; height?: number; preset?: WidgetPreset }) => void;
   onDuplicateWidget?: (widgetId: string) => void;
   onMoveWidget?: (widgetId: string, direction: 'prev' | 'next') => void;
   onEditQuery?: (sql: string) => void;
@@ -67,8 +67,11 @@ interface DashboardWidgetCardProps {
   onCrossFilter?: (column: string, value: string) => void;
   onDragStart?: (e: React.DragEvent, widgetId: string) => void;
   onDragOver?: (e: React.DragEvent, widgetId: string) => void;
+  onDragEnter?: (e: React.DragEvent, widgetId: string) => void;
+  onDragLeave?: (e: React.DragEvent, widgetId: string) => void;
   onDrop?: (e: React.DragEvent, widgetId: string) => void;
-  onDragEnd?: () => void;
+  onDragEnd?: (e: React.DragEvent) => void;
+  isDragging?: boolean;
   isDraggedOver?: boolean;
   filterCompatibility?: FilterCompatibilityInfo | null;
   isPresentationMode?: boolean;
@@ -89,8 +92,11 @@ export const DashboardWidgetCard: React.FC<DashboardWidgetCardProps> = ({
   onCrossFilter,
   onDragStart,
   onDragOver,
+  onDragEnter,
+  onDragLeave,
   onDrop,
   onDragEnd,
+  isDragging = false,
   isDraggedOver = false,
   filterCompatibility,
   isPresentationMode = false
@@ -400,14 +406,27 @@ export const DashboardWidgetCard: React.FC<DashboardWidgetCardProps> = ({
       {/* Widget Card on Grid */}
       <div
         ref={cardRef}
-        draggable={!isPresentationMode && !isResizing}
-        onDragStart={e => onDragStart?.(e, widget.id)}
-        onDragOver={e => onDragOver?.(e, widget.id)}
-        onDrop={e => onDrop?.(e, widget.id)}
-        onDragEnd={onDragEnd}
+        data-widget-id={widget.id}
+        onDragOver={e => {
+          e.preventDefault();
+          onDragOver?.(e, widget.id);
+        }}
+        onDragEnter={e => {
+          e.preventDefault();
+          onDragEnter?.(e, widget.id);
+        }}
+        onDragLeave={e => {
+          onDragLeave?.(e, widget.id);
+        }}
+        onDrop={e => {
+          e.preventDefault();
+          onDrop?.(e, widget.id);
+        }}
         className={`${cardClass} bg-slate-900 border rounded-xl overflow-hidden flex flex-col shadow-lg transition-all relative group print:break-inside-avoid print:shadow-none print:border-slate-300 print:bg-white ${
-          isDraggedOver
-            ? 'border-emerald-500 ring-2 ring-emerald-500/30 shadow-emerald-950/50'
+          isDragging
+            ? 'opacity-40 border-dashed border-emerald-500/80 bg-slate-900/40 scale-[0.99] ring-1 ring-emerald-500/30'
+            : isDraggedOver
+            ? 'border-emerald-500 ring-2 ring-emerald-500/60 shadow-2xl shadow-emerald-950/60 bg-emerald-950/20'
             : isResizing
             ? 'border-emerald-500/80 ring-1 ring-emerald-500/40 shadow-2xl'
             : 'border-slate-800/90 hover:border-slate-700/80'
@@ -419,12 +438,34 @@ export const DashboardWidgetCard: React.FC<DashboardWidgetCardProps> = ({
         }}
         style={{ minHeight: `${currentHeight}px`, height: `${currentHeight}px` }}
       >
-        {/* Widget Header */}
-        <div className="px-3.5 py-2.5 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/40 select-none print:bg-white print:border-slate-200">
+        {/* Drop Target Indicator Overlay */}
+        {isDraggedOver && !isDragging && (
+          <div className="absolute inset-0 z-30 pointer-events-none rounded-xl border-2 border-emerald-500 bg-emerald-500/10 backdrop-blur-[1px] flex flex-col items-center justify-center animate-in fade-in duration-100">
+            <div className="bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xl flex items-center space-x-2 border border-emerald-400/40">
+              <GripVertical className="w-3.5 h-3.5" />
+              <span>Move widget here</span>
+            </div>
+          </div>
+        )}
+
+        {/* Widget Header (Drag Handle) */}
+        <div
+          draggable={!isPresentationMode && !isResizing}
+          onDragStart={e => {
+            const target = e.target as HTMLElement;
+            if (target.closest('button') || target.closest('select') || target.closest('input')) {
+              e.preventDefault();
+              return;
+            }
+            onDragStart?.(e, widget.id);
+          }}
+          onDragEnd={onDragEnd}
+          className="px-3.5 py-2.5 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/40 select-none print:bg-white print:border-slate-200 cursor-grab active:cursor-grabbing"
+        >
           <div className="flex items-center space-x-2 min-w-0 pr-2">
             {!isPresentationMode && (
-              <span title="Drag to reorder widget">
-                <GripVertical className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 cursor-grab active:cursor-grabbing flex-shrink-0" />
+              <span title="Drag to reorder widget" aria-label="Drag to reorder widget" className="cursor-grab active:cursor-grabbing flex-shrink-0">
+                <GripVertical className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 flex-shrink-0" />
               </span>
             )}
             <span className="w-2 h-2 rounded-full bg-emerald-500/80 flex-shrink-0 print:bg-emerald-600" />
@@ -662,7 +703,12 @@ export const DashboardWidgetCard: React.FC<DashboardWidgetCardProps> = ({
         {/* Widget Body */}
         <div
           ref={chartContainerRef}
-          className="flex-1 p-3.5 flex flex-col justify-center relative overflow-hidden"
+          draggable={false}
+          onDragStart={e => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          className="flex-1 p-3.5 flex flex-col justify-center relative overflow-hidden widget-chart-body"
         >
           {/* Loading overlay */}
           {isLoading && (
@@ -761,8 +807,13 @@ export const DashboardWidgetCard: React.FC<DashboardWidgetCardProps> = ({
         {/* Free Grid Resize Handle (bottom-right) */}
         {!isPresentationMode && (
           <div
+            draggable={false}
+            onDragStart={e => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
             onMouseDown={handleResizeMouseDown}
-            className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize flex items-end justify-end p-0.5 text-slate-600 hover:text-emerald-400 group-hover:opacity-100 opacity-60 transition-opacity select-none z-10"
+            className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize flex items-end justify-end p-0.5 text-slate-600 hover:text-emerald-400 group-hover:opacity-100 opacity-60 transition-opacity select-none z-10 widget-resize-handle"
             title="Drag to resize widget horizontally and vertically"
           >
             <svg viewBox="0 0 6 6" className="w-2.5 h-2.5 fill-current">
