@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { ConnectionManager } from '../database/ConnectionManager';
 import { DatabaseConnectionParams } from '../database/DatabaseAdapter';
+import { SavedConnectionStore } from '../database/SavedConnectionStore';
 import { ApiResponse } from '../utils/apiResponse';
 import { Logger } from '../utils/logger';
 import { AuditLogger } from '../utils/auditLogger';
 
 export const connectionRoutes = Router();
 const connectionManager = ConnectionManager.getInstance();
+const savedConnectionStore = SavedConnectionStore.getInstance();
 
 // Helper to get session ID from cookie or header
 export function getSessionId(req: Request, res: Response): string {
@@ -204,4 +206,196 @@ connectionRoutes.get('/status', (req: Request, res: Response) => {
     isConnected: Boolean(info?.isConnected),
     connection: info
   });
+});
+
+/**
+ * GET /api/database/saved-connections
+ * Lists all saved database connection profiles (passwords omitted)
+ */
+connectionRoutes.get('/saved-connections', (_req: Request, res: Response) => {
+  try {
+    const list = savedConnectionStore.getAll();
+    res.json({
+      success: true,
+      connections: list,
+      count: list.length
+    });
+  } catch (err: any) {
+    Logger.error('Failed to retrieve saved connections', err);
+    ApiResponse.error(res, 500, 'SAVED_CONNECTIONS_FAILED', err.message || 'Failed to list saved connections');
+  }
+});
+
+/**
+ * POST /api/database/saved-connections
+ * Securely stores a database connection profile with encrypted credentials
+ */
+connectionRoutes.post('/saved-connections', (req: Request, res: Response) => {
+  try {
+    const { name, type, host, port, database, username, password, defaultSchema, ssl, filePath } = req.body;
+
+    const resolvedType = type || 'postgresql';
+    if (resolvedType === 'sqlite') {
+      if (!filePath || typeof filePath !== 'string' || !filePath.trim()) {
+        ApiResponse.error(res, 400, 'INVALID_INPUT', 'SQLite connection requires a filePath.');
+        return;
+      }
+    } else {
+      if (!host || !database || !username) {
+        ApiResponse.error(res, 400, 'INVALID_INPUT', 'Host, database name, and username are required.');
+        return;
+      }
+    }
+
+    const saved = savedConnectionStore.save({
+      name,
+      type: resolvedType,
+      host,
+      port,
+      database,
+      username,
+      password,
+      defaultSchema,
+      ssl,
+      filePath
+    });
+
+    Logger.info('Database connection profile saved securely', {
+      id: saved.id,
+      name: saved.name,
+      type: saved.type,
+      database: saved.database
+    });
+
+    res.json({
+      success: true,
+      connection: saved
+    });
+  } catch (err: any) {
+    Logger.error('Failed to save connection profile', err);
+    ApiResponse.error(res, 500, 'SAVE_CONNECTION_FAILED', err.message || 'Failed to save connection profile');
+  }
+});
+
+/**
+ * PUT /api/database/saved-connections/:id
+ * Updates an existing saved connection profile
+ */
+connectionRoutes.put('/saved-connections/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, type, host, port, database, username, password, defaultSchema, ssl, filePath } = req.body;
+
+    const updated = savedConnectionStore.update(id, {
+      name,
+      type,
+      host,
+      port,
+      database,
+      username,
+      password,
+      defaultSchema,
+      ssl,
+      filePath
+    });
+
+    if (!updated) {
+      ApiResponse.error(res, 404, 'CONNECTION_NOT_FOUND', 'Saved connection not found.');
+      return;
+    }
+
+    Logger.info('Database connection profile updated', { id, name: updated.name });
+
+    res.json({
+      success: true,
+      connection: updated
+    });
+  } catch (err: any) {
+    Logger.error('Failed to update saved connection', err);
+    ApiResponse.error(res, 500, 'UPDATE_CONNECTION_FAILED', err.message || 'Failed to update connection profile');
+  }
+});
+
+/**
+ * DELETE /api/database/saved-connections/:id
+ * Removes a saved connection profile
+ */
+connectionRoutes.delete('/saved-connections/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const deleted = savedConnectionStore.delete(id);
+
+    if (!deleted) {
+      ApiResponse.error(res, 404, 'CONNECTION_NOT_FOUND', 'Saved connection not found.');
+      return;
+    }
+
+    Logger.info('Database connection profile deleted', { id });
+
+    res.json({
+      success: true,
+      message: 'Saved connection deleted successfully'
+    });
+  } catch (err: any) {
+    Logger.error('Failed to delete saved connection', err);
+    ApiResponse.error(res, 500, 'DELETE_CONNECTION_FAILED', err.message || 'Failed to delete connection profile');
+  }
+});
+
+/**
+ * POST /api/database/saved-connections/:id/connect
+ * Establishes active database connection using decrypted credentials from server-side store
+ */
+connectionRoutes.post('/saved-connections/:id/connect', async (req: Request, res: Response) => {
+  const startTime = Date.now();
+  const sessionId = getSessionId(req, res);
+  const { id } = req.params;
+
+  try {
+    const params = savedConnectionStore.getDecryptedConnectionParams(id);
+    if (!params) {
+      ApiResponse.error(res, 404, 'CONNECTION_NOT_FOUND', 'Saved connection not found or could not be loaded.');
+      return;
+    }
+
+    const connectionInfo = await connectionManager.connect(sessionId, params);
+    savedConnectionStore.recordConnectionSuccess(id);
+
+    AuditLogger.record({
+      type: 'DATABASE_CONNECTED',
+      sessionId,
+      status: 'success',
+      durationMs: Date.now() - startTime,
+      details: {
+        savedConnectionId: id,
+        database: connectionInfo.database,
+        host: connectionInfo.host,
+        port: connectionInfo.port,
+        username: connectionInfo.username
+      }
+    });
+
+    Logger.info('Connected via saved connection profile', {
+      id,
+      sessionId,
+      database: connectionInfo.database
+    });
+
+    res.json({
+      success: true,
+      connection: connectionInfo
+    });
+  } catch (err: any) {
+    const durationMs = Date.now() - startTime;
+    AuditLogger.record({
+      type: 'DATABASE_CONNECTED',
+      sessionId,
+      status: 'failure',
+      durationMs,
+      details: { savedConnectionId: id, error: err.message || 'Connection failed' }
+    });
+
+    Logger.error('Failed to connect via saved connection profile', err, { id, sessionId, durationMs });
+    ApiResponse.error(res, 400, 'CONNECTION_FAILED', err.message || 'Failed to connect using saved connection');
+  }
 });

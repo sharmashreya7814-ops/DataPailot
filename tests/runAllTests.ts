@@ -38,6 +38,7 @@ import { runRealAuthFoundationTests } from './testRealAuthFoundation';
 import { runPasswordResetTests } from './testPasswordReset';
 import { runEmailVerificationTests } from './testEmailVerification';
 import { runRealEmailDeliveryTests } from './testPhase33RealEmailDelivery';
+import { runSchemaSyncAndSavedConnectionsTests } from './testSchemaSyncAndSavedConnections';
 
 console.log('\n============================================================');
 console.log('DATAPILOT PHASE 8: AUTOMATED TEST SUITE & REGRESSION MATRIX');
@@ -88,7 +89,8 @@ export const suites: TestGroup[] = [
   { name: '33. REAL USER AUTHENTICATION FOUNDATION', runner: runRealAuthFoundationTests },
   { name: '34. PRODUCTION PASSWORD RESET & RECOVERY', runner: runPasswordResetTests },
   { name: '35. EMAIL VERIFICATION & LIFECYCLE (PHASE 3.2)', runner: runEmailVerificationTests },
-  { name: '36. REAL EMAIL DELIVERY & SECURITY (PHASE 3.3)', runner: runRealEmailDeliveryTests }
+  { name: '36. REAL EMAIL DELIVERY & SECURITY (PHASE 3.3)', runner: runRealEmailDeliveryTests },
+  { name: '37. SCHEMA SYNC WITH ANALYSIS TOOLKIT & SAVED DATABASE CONNECTIONS', runner: runSchemaSyncAndSavedConnectionsTests }
 ];
 
 async function runAll() {

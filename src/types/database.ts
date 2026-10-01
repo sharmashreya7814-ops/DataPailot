@@ -9,6 +9,49 @@ export interface DatabaseConnectionParams {
   ssl?: boolean;
 }
 
+export interface SavedDatabaseConnection {
+  id: string;
+  name: string;
+  type: 'postgresql' | 'mysql' | 'sqlserver' | 'sqlite' | 'oracle';
+  host?: string;
+  port?: number;
+  database?: string;
+  username?: string;
+  defaultSchema?: string;
+  ssl?: boolean;
+  filePath?: string;
+  hasPassword?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastConnectedAt?: string;
+}
+
+export interface SaveConnectionInput {
+  name: string;
+  type: 'postgresql' | 'mysql' | 'sqlserver' | 'sqlite' | 'oracle';
+  host?: string;
+  port?: number;
+  database?: string;
+  username?: string;
+  password?: string;
+  defaultSchema?: string;
+  ssl?: boolean;
+  filePath?: string;
+}
+
+export interface UpdateSavedConnectionInput {
+  name?: string;
+  type?: 'postgresql' | 'mysql' | 'sqlserver' | 'sqlite' | 'oracle';
+  host?: string;
+  port?: number;
+  database?: string;
+  username?: string;
+  password?: string;
+  defaultSchema?: string;
+  ssl?: boolean;
+  filePath?: string;
+}
+
 export interface SanitizedConnectionInfo {
   id: string;
   type: string;

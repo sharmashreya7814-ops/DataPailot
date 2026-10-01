@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sparkles,
   Table as TableIcon,
@@ -55,6 +55,9 @@ interface AnalysisStudioProps {
   onEditInEditor: (sql: string) => void;
   isRunningQuery?: boolean;
   onAddToDashboard?: (query: GeneratedAnalysisQuery) => void;
+  selectedSchema?: string;
+  onSelectSchema?: (schema: string) => void;
+  schemas?: string[];
 }
 
 const CATEGORIES: {
@@ -90,12 +93,67 @@ export const AnalysisStudio: React.FC<AnalysisStudioProps> = ({
   onExecuteQuery,
   onEditInEditor,
   isRunningQuery = false,
-  onAddToDashboard
+  onAddToDashboard,
+  selectedSchema: controlledSchema,
+  onSelectSchema,
+  schemas = []
 }) => {
   const [activeCategory, setActiveCategory] = useState<AnalysisCategory>('BASIC');
   const [tableDetails, setTableDetails] = useState<TableDetailsResult | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [localSchema, setLocalSchema] = useState<string>('');
+
+  const activeSchema = controlledSchema !== undefined ? controlledSchema : localSchema;
+
+  const handleSchemaChange = (newSchema: string) => {
+    setLocalSchema(newSchema);
+    onSelectSchema?.(newSchema);
+    if (newSchema && newSchema !== 'ALL') {
+      const firstInSchema = allTables.find(t => t.schema === newSchema);
+      if (firstInSchema) {
+        onSelectTable(firstInSchema);
+      }
+    }
+  };
+
+  // Discover all unique non-imported schemas from database and tables
+  const availableSchemas = useMemo(() => {
+    const schemaSet = new Set<string>();
+    if (schemas && Array.isArray(schemas)) {
+      schemas.forEach(s => {
+        if (s && s !== 'imported') schemaSet.add(s);
+      });
+    }
+    allTables.forEach(t => {
+      if (t.schema && t.schema !== 'imported') {
+        schemaSet.add(t.schema);
+      }
+    });
+
+    return Array.from(schemaSet).sort((a, b) => {
+      if (a === 'public') return -1;
+      if (b === 'public') return 1;
+      return a.localeCompare(b);
+    });
+  }, [schemas, allTables]);
+
+  // Filter tables by active schema if selected
+  const schemaFilteredTables = useMemo(() => {
+    if (!activeSchema || activeSchema === 'ALL') {
+      return allTables;
+    }
+    return allTables.filter(t => t.schema === activeSchema);
+  }, [allTables, activeSchema]);
+
+  // Synchronize selected table when active schema changes
+  useEffect(() => {
+    if (schemaFilteredTables.length > 0) {
+      if (!selectedTable || !schemaFilteredTables.some(t => t.schema === selectedTable.schema && t.name === selectedTable.name)) {
+        onSelectTable(schemaFilteredTables[0]);
+      }
+    }
+  }, [schemaFilteredTables, selectedTable, onSelectTable]);
 
   // Search filter across categories
   const [searchQuery, setSearchQuery] = useState('');
@@ -153,8 +211,8 @@ export const AnalysisStudio: React.FC<AnalysisStudioProps> = ({
   // Load selected table details
   useEffect(() => {
     if (!selectedTable) {
-      if (allTables.length > 0) {
-        onSelectTable(allTables[0]);
+      if (schemaFilteredTables.length > 0) {
+        onSelectTable(schemaFilteredTables[0]);
       }
       return;
     }
@@ -172,7 +230,7 @@ export const AnalysisStudio: React.FC<AnalysisStudioProps> = ({
       .finally(() => {
         setIsLoadingDetails(false);
       });
-  }, [selectedTable?.schema, selectedTable?.name, allTables]);
+  }, [selectedTable?.schema, selectedTable?.name, schemaFilteredTables]);
 
   const handlePreviewQuery = (query: GeneratedAnalysisQuery) => {
     setPreviewQuery(query);
@@ -207,7 +265,7 @@ export const AnalysisStudio: React.FC<AnalysisStudioProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950 text-slate-200 overflow-hidden">
-      {/* Top Banner: Table selector, History button, Search */}
+      {/* Top Banner: Schema selector, Table selector, History button, Search */}
       <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
           <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
@@ -227,19 +285,45 @@ export const AnalysisStudio: React.FC<AnalysisStudioProps> = ({
         </div>
 
         <div className="flex items-center space-x-3">
+          {/* Schema Selector (if multiple schemas exist) */}
+          {availableSchemas.length > 1 && (
+            <div className="flex items-center space-x-2 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800">
+              <Layers className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-[10px] uppercase font-semibold text-slate-400">Schema:</span>
+              <select
+                value={activeSchema || 'ALL'}
+                onChange={e => handleSchemaChange(e.target.value === 'ALL' ? '' : e.target.value)}
+                className="bg-transparent text-xs font-mono font-medium text-slate-200 focus:outline-none cursor-pointer"
+                aria-label="Select Schema"
+              >
+                <option value="ALL" className="bg-slate-900">
+                  All Schemas ({allTables.filter(t => t.schema !== 'imported').length})
+                </option>
+                {availableSchemas.map(s => {
+                  const count = allTables.filter(t => t.schema === s).length;
+                  return (
+                    <option key={s} value={s} className="bg-slate-900">
+                      {s} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
+
           {/* Active Table Selector */}
           <div className="flex items-center space-x-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
             <TableIcon className="w-3.5 h-3.5 text-indigo-400" />
             <select
               value={selectedTable ? `${selectedTable.schema}.${selectedTable.name}` : ''}
               onChange={e => {
-                const [schema, name] = e.target.value.split('.');
-                const match = allTables.find(t => t.schema === schema && t.name === name);
+                const match = allTables.find(t => `${t.schema}.${t.name}` === e.target.value);
                 if (match) onSelectTable(match);
               }}
-              className="bg-transparent text-xs font-mono font-medium text-slate-200 focus:outline-none max-w-[200px]"
+              className="bg-transparent text-xs font-mono font-medium text-slate-200 focus:outline-none max-w-[240px] cursor-pointer"
+              aria-label="Select Table"
             >
-              {allTables.map(t => (
+              {schemaFilteredTables.map(t => (
                 <option key={`${t.schema}.${t.name}`} value={`${t.schema}.${t.name}`} className="bg-slate-900">
                   {t.schema}.{t.name}
                 </option>
@@ -334,7 +418,7 @@ export const AnalysisStudio: React.FC<AnalysisStudioProps> = ({
               {activeCategory === 'JOIN' && (
                 <JoinBuilder
                   table={tableDetails}
-                  allTables={allTables}
+                  allTables={schemaFilteredTables}
                   onPreviewQuery={handlePreviewQuery}
                 />
               )}

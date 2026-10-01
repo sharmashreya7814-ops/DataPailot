@@ -10,7 +10,10 @@ import {
   AiExplainSqlResult,
   AiExplainResultsResult,
   AiFixSqlResult,
-  AiStatus
+  AiStatus,
+  SavedDatabaseConnection,
+  SaveConnectionInput,
+  UpdateSavedConnectionInput
 } from '../types/database';
 
 export class DatabaseApiClient {
@@ -84,6 +87,51 @@ export class DatabaseApiClient {
       headers: this.getHeaders()
     });
     return this.handleResponse(res);
+  }
+
+  public static async getSavedConnections(): Promise<SavedDatabaseConnection[]> {
+    const res = await fetch('/api/database/saved-connections', {
+      headers: this.getHeaders()
+    });
+    const data = await this.handleResponse<{ success: boolean; connections: SavedDatabaseConnection[]; count: number }>(res);
+    return data.connections;
+  }
+
+  public static async saveConnection(input: SaveConnectionInput): Promise<SavedDatabaseConnection> {
+    const res = await fetch('/api/database/saved-connections', {
+      method: 'POST',
+      headers: this.getHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(input)
+    });
+    const data = await this.handleResponse<{ success: boolean; connection: SavedDatabaseConnection }>(res);
+    return data.connection;
+  }
+
+  public static async updateSavedConnection(id: string, input: UpdateSavedConnectionInput): Promise<SavedDatabaseConnection> {
+    const res = await fetch(`/api/database/saved-connections/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: this.getHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(input)
+    });
+    const data = await this.handleResponse<{ success: boolean; connection: SavedDatabaseConnection }>(res);
+    return data.connection;
+  }
+
+  public static async deleteSavedConnection(id: string): Promise<void> {
+    const res = await fetch(`/api/database/saved-connections/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: this.getHeaders()
+    });
+    await this.handleResponse(res);
+  }
+
+  public static async connectSavedConnection(id: string): Promise<SanitizedConnectionInfo> {
+    const res = await fetch(`/api/database/saved-connections/${encodeURIComponent(id)}/connect`, {
+      method: 'POST',
+      headers: this.getHeaders({ 'Content-Type': 'application/json' })
+    });
+    const data = await this.handleResponse<{ success: boolean; connection: SanitizedConnectionInfo }>(res);
+    return data.connection;
   }
 
   public static async getSchemas(): Promise<string[]> {

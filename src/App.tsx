@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { DatabaseExplorer } from './components/Sidebar/DatabaseExplorer';
 import { ConnectionModal } from './components/Sidebar/ConnectionModal';
+import { SaveConnectionPromptModal } from './components/Sidebar/SaveConnectionPromptModal';
 import { SqlEditor } from './components/Editor/SqlEditor';
 import { SqlEditorTabs } from './components/Editor/SqlEditorTabs';
 import { SqlWorkspace } from './components/Editor/SqlWorkspace';
@@ -20,6 +21,7 @@ import { DataCleaningWorkspace } from './components/DataCleaning/DataCleaningWor
 import {
   DiscoveredTable, DatabaseRelationship,
   SanitizedConnectionInfo,
+  DatabaseConnectionParams,
   TableDetailsResult,
   QueryExecutionResult,
   QueryHistoryItem,
@@ -138,6 +140,10 @@ function AppContent() {
   const [selectedTable, setSelectedTable] = useState<TableDetailsResult | null>(null);
   const [isLoadingTableDetails, setIsLoadingTableDetails] = useState(false);
   const [isRefreshingSchema, setIsRefreshingSchema] = useState(false);
+
+  // Saved Connection Prompt State
+  const [isSavePromptOpen, setIsSavePromptOpen] = useState(false);
+  const [lastConnectedParams, setLastConnectedParams] = useState<DatabaseConnectionParams | null>(null);
 
   // Performance Analyzer State
   const [isPerformanceModalOpen, setIsPerformanceModalOpen] = useState(false);
@@ -653,7 +659,7 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
   };
 
   // Connected to a real database
-  const handleConnected = async (connInfo: SanitizedConnectionInfo) => {
+  const handleConnected = async (connInfo: SanitizedConnectionInfo, rawParams?: DatabaseConnectionParams) => {
     setConnection(connInfo);
     setIsRefreshingSchema(true);
     try {
@@ -668,6 +674,11 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
       if (discovered.length > 0) {
         // Auto-introspect first table
         handleSelectTable(discovered[0]);
+      }
+      // If manual connection with password was made, prompt user to optionally save
+      if (rawParams && rawParams.password) {
+        setLastConnectedParams(rawParams);
+        setIsSavePromptOpen(true);
       }
     } catch (err: any) {
       setRefreshMessage(`Connected, but failed to list tables: ${err.message}`);
@@ -1115,6 +1126,9 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
                         : tables[0] || null
                     }
                     allTables={tables}
+                    selectedSchema={selectedSchema}
+                    onSelectSchema={setSelectedSchema}
+                    schemas={schemas}
                     onSelectTable={handleSelectTable}
                     onExecuteQuery={handleRunQueryFromAnalysis}
                     onEditInEditor={handleEditInEditorFromAnalysis}
@@ -1363,6 +1377,19 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
         onClose={() => setIsConnectModalOpen(false)}
         onConnected={handleConnected}
         currentConnection={connection}
+      />
+
+      {/* Save Connection Confirmation Prompt Modal */}
+      <SaveConnectionPromptModal
+        isOpen={isSavePromptOpen}
+        onClose={() => setIsSavePromptOpen(false)}
+        connectionInfo={connection}
+        lastConnectedParams={lastConnectedParams}
+        onSaved={() => {
+          setIsSavePromptOpen(false);
+          setRefreshMessage('Database connection profile saved securely.');
+          setTimeout(() => setRefreshMessage(null), 4000);
+        }}
       />
 
       {/* Data Import Modal */}
