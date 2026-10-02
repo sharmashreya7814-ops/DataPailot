@@ -1687,11 +1687,12 @@ ORDER BY units_or_orders DESC`;
   public generateRowCount(schema: string, tableName: string): GeneratedAnalysisQuery {
     const fullTable = this.quoteTable(schema, tableName);
     const sql = `SELECT COUNT(*) AS total_rows FROM ${fullTable};`;
+    AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Table Row Count');
     return {
       name: 'Table Row Count',
       category: 'DATA_QUALITY',
       description: `Exact table row count for ${tableName}`,
-      tablesUsed: [`${schema}.${tableName}`],
+      tablesUsed: [this.formatTableDisplay(schema, tableName)],
       columnsUsed: [],
       sql
     };
@@ -1717,11 +1718,13 @@ ORDER BY units_or_orders DESC`;
     ) AS null_percentage
 FROM ${fullTable};`;
 
+    AnalysisSqlGenerator.validateNoPlaceholders(sql, `NULL Analysis (${column})`);
+
     return {
       name: `NULL Analysis (${column})`,
       category: 'DATA_QUALITY',
-      description: `Count missing NULL values and percentage for ${column} ${column}`,
-      tablesUsed: [`${schema}.${tableName}`],
+      description: `Count missing NULL values and percentage for ${column}`,
+      tablesUsed: [this.formatTableDisplay(schema, tableName)],
       columnsUsed: [column],
       sql
     };
@@ -1746,11 +1749,13 @@ GROUP BY ${quotedCols}
 HAVING COUNT(*) > 1
 ORDER BY duplicate_count DESC`, limit) + ';';
 
+    AnalysisSqlGenerator.validateNoPlaceholders(sql, `Duplicate Detection (${columns.join(', ')})`);
+
     return {
       name: `Duplicate Detection (${columns.join(', ')})`,
       category: 'DATA_QUALITY',
       description: `Find duplicate composite rows on (${columns.join(', ')}) with COUNT(*) > 1`,
-      tablesUsed: [`${schema}.${tableName}`],
+      tablesUsed: [this.formatTableDisplay(schema, tableName)],
       columnsUsed: columns,
       sql
     };
@@ -1767,7 +1772,7 @@ ORDER BY duplicate_count DESC`, limit) + ';';
     const fullTable = this.quoteTable(schema, tableName);
     const col = this.quoteIdentifier(column);
     const sql = `SELECT
-    '${column}' AS column_name,
+    ${AnalysisSqlGenerator.escapeLiteral(column)} AS column_name,
     COUNT(*) AS total_rows,
     COUNT(${col}) AS non_null_count,
     COUNT(*) - COUNT(${col}) AS null_count,
@@ -1776,11 +1781,13 @@ ORDER BY duplicate_count DESC`, limit) + ';';
     CAST(MAX(${col}) AS CHAR(255)) AS max_value
 FROM ${fullTable};`;
 
+    AnalysisSqlGenerator.validateNoPlaceholders(sql, `Column Profile (${column})`);
+
     return {
       name: `Column Profile (${column})`,
       category: 'DATA_QUALITY',
-      description: `Deep ${column} health profiling for ${column}`,
-      tablesUsed: [`${schema}.${tableName}`],
+      description: `Deep health profiling for ${column}`,
+      tablesUsed: [this.formatTableDisplay(schema, tableName)],
       columnsUsed: [column],
       sql
     };
@@ -1796,7 +1803,66 @@ FROM ${fullTable};`;
   ): GeneratedAnalysisQuery {
     const fullTable = this.quoteTable(schema, tableName);
     const col = this.quoteIdentifier(column);
-    const sql = `SELECT
+    const dialectType = this.getDialectType(schema);
+
+    let sql = '';
+    if (dialectType === 'sqlite') {
+      sql = `WITH stats AS (
+    SELECT
+        COUNT(${col}) AS count_valid,
+        AVG(${col} * 1.0) AS avg_val,
+        SUM(${col} * 1.0) AS sum_val,
+        SUM((${col} * 1.0) * (${col} * 1.0)) AS sum_sq,
+        MIN(${col}) AS minimum,
+        MAX(${col}) AS maximum
+    FROM ${fullTable}
+    WHERE ${col} IS NOT NULL
+)
+SELECT
+    count_valid,
+    ROUND(avg_val, 4) AS average,
+    ROUND(
+        CASE
+            WHEN count_valid > 1 AND (sum_sq - (sum_val * sum_val * 1.0 / count_valid)) > 0
+            THEN sqrt((sum_sq - (sum_val * sum_val * 1.0 / count_valid)) / (count_valid - 1.0))
+            WHEN count_valid >= 1 THEN 0.0
+            ELSE NULL
+        END,
+        4
+    ) AS std_deviation,
+    ROUND(
+        CASE
+            WHEN count_valid > 1 AND (sum_sq - (sum_val * sum_val * 1.0 / count_valid)) > 0
+            THEN (sum_sq - (sum_val * sum_val * 1.0 / count_valid)) / (count_valid - 1.0)
+            WHEN count_valid >= 1 THEN 0.0
+            ELSE NULL
+        END,
+        4
+    ) AS variance,
+    minimum,
+    maximum
+FROM stats;`;
+    } else if (dialectType === 'sqlserver') {
+      sql = `SELECT
+    COUNT(${col}) AS count_valid,
+    ROUND((AVG(CAST(${col} AS FLOAT))) * 1.0, 4) AS average,
+    ROUND((STDEV(${col})) * 1.0, 4) AS std_deviation,
+    ROUND((VAR(${col})) * 1.0, 4) AS variance,
+    MIN(${col}) AS minimum,
+    MAX(${col}) AS maximum
+FROM ${fullTable};`;
+    } else if (dialectType === 'mysql') {
+      sql = `SELECT
+    COUNT(${col}) AS count_valid,
+    ROUND((AVG(${col})) * 1.0, 4) AS average,
+    ROUND((STDDEV_SAMP(${col})) * 1.0, 4) AS std_deviation,
+    ROUND((VAR_SAMP(${col})) * 1.0, 4) AS variance,
+    MIN(${col}) AS minimum,
+    MAX(${col}) AS maximum
+FROM ${fullTable};`;
+    } else {
+      // PostgreSQL, Oracle, default
+      sql = `SELECT
     COUNT(${col}) AS count_valid,
     ROUND((AVG(${col})) * 1.0, 4) AS average,
     ROUND((STDDEV(${col})) * 1.0, 4) AS std_deviation,
@@ -1804,12 +1870,17 @@ FROM ${fullTable};`;
     MIN(${col}) AS minimum,
     MAX(${col}) AS maximum
 FROM ${fullTable};`;
+    }
+
+    AnalysisSqlGenerator.validateNoPlaceholders(sql, `Numeric Summary (${column})`);
+
+    const tableDisplay = this.formatTableDisplay(schema, tableName);
 
     return {
       name: `Numeric Summary (${column})`,
       category: 'DATA_QUALITY',
       description: `Statistical distribution and spread metrics for ${column}`,
-      tablesUsed: [`${schema}.${tableName}`],
+      tablesUsed: [tableDisplay],
       columnsUsed: [column],
       sql
     };
