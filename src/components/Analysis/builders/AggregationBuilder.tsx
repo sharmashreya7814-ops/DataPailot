@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Sigma, Play, Hash } from 'lucide-react';
+import { Plus, Trash2, Sigma, Play, Hash, Loader2, AlertCircle } from 'lucide-react';
 import { DatabaseApiClient } from '../../../services/databaseApi';
 import { TableDetailsResult } from '../../../types/database';
 import { AggregationItem, GeneratedAnalysisQuery } from '../../../types/analysis';
@@ -16,6 +16,8 @@ export const AggregationBuilder: React.FC<AggregationBuilderProps> = ({
 }) => {
   const { numericColumns } = classifyColumns(table.columns);
   const defaultNumeric = numericColumns[0]?.name || table.columns[0]?.name || '*';
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const [aggregations, setAggregations] = useState<AggregationItem[]>([
     {
@@ -53,6 +55,7 @@ export const AggregationBuilder: React.FC<AggregationBuilderProps> = ({
   };
 
   const updateAggregation = (id: string, updates: Partial<AggregationItem>) => {
+    setGenerateError(null);
     setAggregations(prev =>
       prev.map(a => {
         if (a.id === id) {
@@ -72,12 +75,20 @@ export const AggregationBuilder: React.FC<AggregationBuilderProps> = ({
   };
 
   const handlePreview = async () => {
-    const query = await DatabaseApiClient.generateAnalysis('generateAggregation', 
-      table.schema,
-      table.name,
-      aggregations
-    );
-    onPreviewQuery(query);
+    setIsGenerating(true);
+    setGenerateError(null);
+    try {
+      const query = await DatabaseApiClient.generateAnalysis('generateAggregation', 
+        table.schema,
+        table.name,
+        aggregations
+      );
+      onPreviewQuery(query);
+    } catch (err: any) {
+      setGenerateError(err?.message || 'Failed to generate aggregation SQL');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -165,13 +176,31 @@ export const AggregationBuilder: React.FC<AggregationBuilderProps> = ({
         </button>
       </div>
 
+      {/* Inline Error Message */}
+      {generateError && (
+        <div className="p-3 rounded-lg bg-rose-950/50 border border-rose-800 text-rose-300 text-xs flex items-center space-x-2">
+          <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+          <span>{generateError}</span>
+        </div>
+      )}
+
       <div className="flex justify-end pt-4 border-t border-slate-800">
         <button
           onClick={handlePreview}
-          className="flex items-center space-x-2 px-5 py-2.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors shadow-lg shadow-emerald-950/40"
+          disabled={isGenerating || aggregations.length === 0}
+          className="flex items-center space-x-2 px-5 py-2.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-emerald-950/40"
         >
-          <Play className="w-3.5 h-3.5 fill-current" />
-          <span>Preview Aggregation SQL</span>
+          {isGenerating ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Generating SQL...</span>
+            </>
+          ) : (
+            <>
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Preview Aggregation SQL</span>
+            </>
+          )}
         </button>
       </div>
     </div>

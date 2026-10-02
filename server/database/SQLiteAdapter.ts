@@ -115,7 +115,7 @@ export class SQLiteAdapter extends AbstractDatabaseAdapter {
   public getDialect(): SqlDialect {
     return {
       quoteIdentifier: (identifier: string) => `"${identifier.replace(/"/g, '""')}"`,
-      formatLimit: (sql: string, limit: number) => `${sql} LIMIT ${limit}`,
+      formatLimit: (sql: string, limit: number) => `${sql}\nLIMIT ${limit}`,
       formatPagination: (sql: string, limit: number, offset: number) => `${sql} LIMIT ${limit} OFFSET ${offset}`,
       formatDate: (date: Date) => `'${date.toISOString()}'`,
       formatExplain: (sql: string) => `EXPLAIN QUERY PLAN ${sql}`,

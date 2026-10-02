@@ -29,9 +29,22 @@ export class AnalysisSqlGenerator {
   }
 
   /**
-   * Safely quotes a full table name: "schema"."table"
+   * Safely formats a human-readable table identifier: "schema.table" for external databases, or "table" for imported datasets
+   */
+  public formatTableDisplay(schema: string, tableName: string): string {
+    if (schema === 'imported' || !schema) {
+      return tableName;
+    }
+    return `${schema}.${tableName}`;
+  }
+
+  /**
+   * Safely quotes a full table name: "schema"."table" for external databases, or "table" for imported datasets
    */
   public quoteTable(schema: string, tableName: string): string {
+    if (schema === 'imported' || !schema) {
+      return this.quoteIdentifier(tableName);
+    }
     return this.dialect.qualifyTable(schema, tableName);
   }
 
@@ -84,6 +97,7 @@ export class AnalysisSqlGenerator {
     } = {}
   ): GeneratedAnalysisQuery {
     const fullTable = this.quoteTable(schema, tableName);
+    const tableDisplay = this.formatTableDisplay(schema, tableName);
     const limit = options.limit || 50;
 
     switch (operation) {
@@ -91,8 +105,8 @@ export class AnalysisSqlGenerator {
         return {
           name: 'Preview Data',
           category: 'BASIC',
-          description: `Preview the first ${limit} rows of ${schema}.${tableName}`,
-          tablesUsed: [`${schema}.${tableName}`],
+          description: `Preview the first ${limit} rows of ${tableDisplay}`,
+          tablesUsed: [tableDisplay],
           columnsUsed: options.columns || ['*'],
           sql: this.dialect.formatLimit(`SELECT *\nFROM ${fullTable}`, limit) + ';'
         };
@@ -104,8 +118,8 @@ export class AnalysisSqlGenerator {
         return {
           name: 'Select Columns',
           category: 'BASIC',
-          description: `Retrieve specific columns from ${schema}.${tableName}`,
-          tablesUsed: [`${schema}.${tableName}`],
+          description: `Retrieve specific columns from ${tableDisplay}`,
+          tablesUsed: [tableDisplay],
           columnsUsed: options.columns || [],
           sql: this.dialect.formatLimit(`SELECT\n    ${cols}\nFROM ${fullTable}`, limit) + ';'
         };
@@ -117,7 +131,7 @@ export class AnalysisSqlGenerator {
           name: 'Select Distinct Values',
           category: 'BASIC',
           description: `List unique values for ${options.column || ''}`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [tableDisplay],
           columnsUsed: options.column ? [options.column] : [],
           sql: this.dialect.formatLimit(`SELECT DISTINCT\n    ${col}\nFROM ${fullTable}\nWHERE ${col} IS NOT NULL\nORDER BY ${col} ASC`, limit) + ';'
         };
@@ -127,8 +141,8 @@ export class AnalysisSqlGenerator {
         return {
           name: 'Count Rows',
           category: 'BASIC',
-          description: `Count total row records in ${schema}.${tableName}`,
-          tablesUsed: [`${schema}.${tableName}`],
+          description: `Count total row records in ${tableDisplay}`,
+          tablesUsed: [tableDisplay],
           columnsUsed: [],
           sql: `SELECT COUNT(*) AS total_rows\nFROM ${fullTable};`
         };
@@ -139,7 +153,7 @@ export class AnalysisSqlGenerator {
           name: 'Count Distinct Values',
           category: 'BASIC',
           description: `Count distinct non-null values in ${options.column}`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [tableDisplay],
           columnsUsed: options.column ? [options.column] : [],
           sql: `SELECT COUNT(DISTINCT ${col}) AS distinct_count\nFROM ${fullTable};`
         };
@@ -151,7 +165,7 @@ export class AnalysisSqlGenerator {
           name: 'Sort Ascending',
           category: 'BASIC',
           description: `Sort rows by ${options.column} in ascending`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [tableDisplay],
           columnsUsed: options.column ? [options.column] : [],
           sql: this.dialect.formatLimit(`SELECT *\nFROM ${fullTable}\nORDER BY ${col} ASC`, limit) + ';'
         };
@@ -163,7 +177,7 @@ export class AnalysisSqlGenerator {
           name: 'Sort Descending',
           category: 'BASIC',
           description: `Sort rows by ${options.column} in descending`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [tableDisplay],
           columnsUsed: options.column ? [options.column] : [],
           sql: this.dialect.formatLimit(`SELECT *\nFROM ${fullTable}\nORDER BY ${col} DESC`, limit) + ';'
         };
@@ -175,7 +189,7 @@ export class AnalysisSqlGenerator {
           name: `Top ${limit} Rows`,
           category: 'BASIC',
           description: `Highest ${limit} records sorted by ${options.column}`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [tableDisplay],
           columnsUsed: options.column ? [options.column] : [],
           sql: this.dialect.formatLimit(`SELECT *\nFROM ${fullTable}\nORDER BY ${col} DESC`, limit) + ';'
         };
@@ -187,7 +201,7 @@ export class AnalysisSqlGenerator {
           name: `Bottom ${limit} Rows`,
           category: 'BASIC',
           description: `Lowest ${limit} records sorted by ${options.column}`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [tableDisplay],
           columnsUsed: options.column ? [options.column] : [],
           sql: this.dialect.formatLimit(`SELECT *\nFROM ${fullTable}\nORDER BY ${col} ASC`, limit) + ';'
         };
@@ -198,8 +212,8 @@ export class AnalysisSqlGenerator {
         return {
           name: `Limit to ${limit} Rows`,
           category: 'BASIC',
-          description: `Fetch limited records from ${schema}.${tableName}`,
-          tablesUsed: [`${schema}.${tableName}`],
+          description: `Fetch limited records from ${tableDisplay}`,
+          tablesUsed: [tableDisplay],
           columnsUsed: [],
           sql: this.dialect.formatLimit(`SELECT *\nFROM ${fullTable}`, limit) + ';'
         };

@@ -17,7 +17,7 @@ const unifiedDataLayer = UnifiedDataLayer.getInstance();
 
 const sqliteDialect: SqlDialect = {
   quoteIdentifier: (identifier: string) => `"${identifier.replace(/"/g, '""')}"`,
-  formatLimit: (sql: string, limit: number) => `${sql} LIMIT ${limit}`,
+  formatLimit: (sql: string, limit: number) => `${sql}\nLIMIT ${limit}`,
   formatPagination: (sql: string, limit: number, offset: number) => `${sql} LIMIT ${limit} OFFSET ${offset}`,
   formatDate: (date: Date) => `'${date.toISOString()}'`,
   formatExplain: (sql: string) => `EXPLAIN QUERY PLAN ${sql}`,
@@ -203,31 +203,53 @@ queryRoutes.post('/query', async (req: Request, res: Response) => {
  */
 queryRoutes.post('/analysis/generate', async (req: Request, res: Response) => {
   const sessionId = getSessionId(req, res);
+  const storeKey = getSessionDatasetStoreKey(req, res);
   try {
     const adapter = connectionManager.getAdapter(sessionId);
-    const importedDatasets = unifiedDataLayer.getDatasets(sessionId);
+    const importedDatasets = [
+      ...unifiedDataLayer.getDatasets(storeKey),
+      ...unifiedDataLayer.getDatasets(sessionId)
+    ];
+
+    const { method, args } = req.body;
+
+    // Detect if target is an imported dataset
+    // For most methods, args[0] is schema and args[1] is tableName
+    // For join, args[0]?.baseTable?.schema
+    const firstArg = Array.isArray(args) ? args[0] : undefined;
+    const targetSchema = typeof firstArg === 'string'
+      ? firstArg
+      : (typeof firstArg?.baseTable?.schema === 'string' ? firstArg.baseTable.schema : req.body.schema);
+    const targetTable = Array.isArray(args) && typeof args[1] === 'string'
+      ? args[1]
+      : (typeof firstArg?.baseTable?.name === 'string' ? firstArg.baseTable.name : undefined);
+
+    const isImportedTarget =
+      targetSchema === 'imported' ||
+      (targetTable && importedDatasets.some(ds => ds.tableName === targetTable || ds.datasetId === targetTable));
 
     let dialect: SqlDialect;
-    if (!adapter || !adapter.isConnected()) {
-      if (importedDatasets.length > 0) {
-        dialect = sqliteDialect;
-      } else {
-        ApiResponse.error(res, 400, 'NOT_CONNECTED', 'No active database connection.');
-        return;
-      }
-    } else {
+    if (isImportedTarget) {
+      // Imported datasets execute in SQLite via UnifiedDataLayer
+      dialect = sqliteDialect;
+    } else if (adapter && adapter.isConnected()) {
+      // External connected database (PostgreSQL, MySQL, SQL Server, Oracle, etc.)
       dialect = adapter.getDialect();
+    } else if (importedDatasets.length > 0) {
+      dialect = sqliteDialect;
+    } else {
+      // Fallback for offline/preview analysis SQL generation
+      dialect = sqliteDialect;
     }
-    
+
     const generator = new AnalysisSqlGenerator(dialect);
-    
-    const { method, args } = req.body;
+
     if (typeof (generator as any)[method] !== 'function') {
       ApiResponse.error(res, 400, 'INVALID_METHOD', `Method ${method} not found`);
       return;
     }
-    
-    const result = (generator as any)[method](...args);
+
+    const result = (generator as any)[method](...(Array.isArray(args) ? args : []));
     res.json({ success: true, result });
   } catch (err: any) {
     Logger.error('Error generating analysis query', err, { sessionId });

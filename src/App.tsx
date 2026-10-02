@@ -1127,7 +1127,9 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
               <div className="flex-1 flex flex-col h-full overflow-hidden">
                 <div className={`${queryResult ? (isAnalysisResultsCollapsed ? 'flex-1 min-h-0' : 'h-3/5 min-h-0') : 'h-full'} flex flex-col overflow-hidden transition-all duration-200`}>
                   <AnalysisStudio
-                    connectionType={connection?.type || 'postgresql'}
+                    connectionType={
+                      connection?.type || (selectedTable?.schema === 'imported' ? 'sqlite' : 'postgresql')
+                    }
                     selectedTable={
                       selectedTable
                         ? {
