@@ -153,6 +153,7 @@ function AppContent() {
 
   // Analysis Studio Query Results Collapsed State
   const [isAnalysisResultsCollapsed, setIsAnalysisResultsCollapsed] = useState(false);
+  const [activeAnalysisMeta, setActiveAnalysisMeta] = useState<GeneratedAnalysisQuery | null>(null);
 
   // Active dataset computation
   const activeDataset = useMemo(() => {
@@ -930,7 +931,8 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
     setActiveWorkspaceView('editor');
   };
 
-  const handleRunQueryFromAnalysis = async (sql: string): Promise<QueryExecutionResult> => {
+  const handleRunQueryFromAnalysis = async (sql: string, queryMeta?: GeneratedAnalysisQuery): Promise<QueryExecutionResult> => {
+    setActiveAnalysisMeta(queryMeta || null);
     setSqlQuery(sql);
     await executeSql(sql);
     return queryResult || {
@@ -1167,6 +1169,7 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
                       onNavigateToVisualization={() => setActiveWorkspaceView('visualization')}
                       onAddToDashboard={handleAddToDashboardFromResults}
                       sourceName={selectedTable?.name}
+                      analysisName={activeAnalysisMeta?.name}
                       isCollapsible={true}
                       isCollapsed={isAnalysisResultsCollapsed}
                       onToggleCollapse={() => setIsAnalysisResultsCollapsed(prev => !prev)}

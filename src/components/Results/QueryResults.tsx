@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { QueryExecutionResult } from '../../types/database';
 import { ExcelExportService } from '../../services/excelExportService';
+import { ExcelExportModal } from './ExcelExportModal';
 
 interface QueryResultsProps {
   result: QueryExecutionResult | null;
@@ -35,6 +36,7 @@ interface QueryResultsProps {
   onNavigateToVisualization?: () => void;
   onAddToDashboard?: (result: QueryExecutionResult) => void;
   sourceName?: string;
+  analysisName?: string;
   isCollapsible?: boolean;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -49,6 +51,7 @@ export const QueryResults: React.FC<QueryResultsProps> = ({
   onNavigateToVisualization,
   onAddToDashboard,
   sourceName,
+  analysisName,
   isCollapsible,
   isCollapsed = false,
   onToggleCollapse
@@ -58,6 +61,7 @@ export const QueryResults: React.FC<QueryResultsProps> = ({
   const [searchFilter, setSearchFilter] = useState('');
   const [copied, setCopied] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [resizingCol, setResizingCol] = useState<{ name: string; startX: number; startWidth: number } | null>(null);
@@ -334,8 +338,8 @@ export const QueryResults: React.FC<QueryResultsProps> = ({
               <button
                 id="btn-export-excel"
                 type="button"
-                onClick={exportExcel}
-                disabled={isExportingExcel}
+                onClick={() => setIsExcelModalOpen(true)}
+                disabled={isExportingExcel || !result?.rows || result.rows.length === 0}
                 className="flex items-center space-x-1 px-2 py-1 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-750 rounded border border-slate-700/60 transition-colors disabled:opacity-50"
                 title="Export as Excel (.xlsx)"
                 aria-label="Export Excel"
@@ -648,6 +652,18 @@ export const QueryResults: React.FC<QueryResultsProps> = ({
       )}
         </div>
       )}
+
+      {/* Excel Export Workflow Modal (Download vs Add to Workbook) */}
+      <ExcelExportModal
+        isOpen={isExcelModalOpen}
+        onClose={() => setIsExcelModalOpen(false)}
+        columns={result?.columns || []}
+        rows={result?.rows || []}
+        sourceName={sourceName}
+        sqlQuery={result?.query}
+        analysisName={analysisName}
+        onDownloadSingle={exportExcel}
+      />
     </div>
   );
 };

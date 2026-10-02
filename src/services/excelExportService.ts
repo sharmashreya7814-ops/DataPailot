@@ -73,12 +73,114 @@ export class ExcelExportService {
   }
 
   /**
-   * Sanitizes sheet names to Excel constraints (max 31 chars, no invalid chars).
+   * Sanitizes sheet names to Excel constraints (max 31 chars, no invalid chars : \ / ? * [ ]).
    */
-  private static sanitizeSheetName(name: string): string {
+  public static sanitizeSheetName(name: string): string {
     if (!name) return '';
-    const clean = name.replace(/[\\/?*\[\]]/g, '').trim();
-    return clean.substring(0, 31);
+    let clean = name.replace(/[\\/?*\[\]:]/g, ' ').replace(/\s+/g, ' ').trim();
+    clean = clean.replace(/^'+|'+$/g, '');
+    return clean.substring(0, 31).trim();
+  }
+
+  /**
+   * Generates a sensible worksheet name based on analysis metadata, query text, or table source.
+   */
+  public static suggestSheetName(params: {
+    analysisName?: string;
+    sourceName?: string;
+    sql?: string;
+    columns?: { name: string }[];
+  } = {}): string {
+    const { analysisName, sourceName, sql } = params;
+
+    // 1. If explicit analysis name is given
+    if (analysisName && analysisName.trim()) {
+      const rawName = analysisName.trim();
+      const catMatch = rawName.match(/Category Column \(([^)]+)\)/i);
+      if (catMatch) {
+        return this.sanitizeSheetName(`${this.formatName(catMatch[1])} Category`);
+      }
+      const calcMatch = rawName.match(/Calculated Column \(([^)]+)\)/i);
+      if (calcMatch) {
+        return this.sanitizeSheetName(`${this.formatName(calcMatch[1])} Analysis`);
+      }
+      if (rawName.toLowerCase() === 'filtered query') {
+        const whereColMatch = sql?.match(/WHERE\s+["`\[]?([a-zA-Z0-9_]+)["`\]]?/i);
+        if (whereColMatch) {
+          return this.sanitizeSheetName(`${this.formatName(whereColMatch[1])} Analysis`);
+        }
+        return this.sanitizeSheetName(sourceName ? `${this.formatName(sourceName)} Filtered` : 'Filtered Data');
+      }
+      return this.sanitizeSheetName(rawName);
+    }
+
+    // 2. Inspect SQL Query for aggregations / groups / filters
+    if (sql) {
+      const groupByMatch = sql.match(/GROUP\s+BY\s+(?:["`\[]?[\w]+["`\]]?\.)?["`\[]?([a-zA-Z0-9_]+)["`\]]?/i);
+      if (groupByMatch) {
+        const groupCol = groupByMatch[1].toLowerCase();
+        if (groupCol === 'gender') return 'Gender Analysis';
+        if (groupCol === 'city') return 'City Analysis';
+        if (groupCol === 'product') return 'Product Analysis';
+        if (groupCol === 'region') return 'Regional Analysis';
+        if (groupCol === 'category') return 'Category Analysis';
+        if (groupCol === 'month' || groupCol === 'order_date') return 'Revenue by Month';
+        return this.sanitizeSheetName(`${this.formatName(groupCol)} Analysis`);
+      }
+
+      const whereMatch = sql.match(/WHERE\s+(?:["`\[]?[\w]+["`\]]?\.)?["`\[]?([a-zA-Z0-9_]+)["`\]]?/i);
+      if (whereMatch) {
+        const whereCol = whereMatch[1].toLowerCase();
+        if (whereCol === 'city') return 'City Analysis';
+        if (whereCol === 'gender') return 'Gender Analysis';
+        if (whereCol === 'product') return 'Product Analysis';
+        return this.sanitizeSheetName(`${this.formatName(whereCol)} Analysis`);
+      }
+
+      if (/date_trunc|period|monthly|order_date/i.test(sql)) {
+        return 'Revenue by Month';
+      }
+    }
+
+    // 3. Fallback to Source Table Name
+    if (sourceName && sourceName.trim()) {
+      const lower = sourceName.toLowerCase();
+      if (lower.includes('sales')) return 'Sales';
+      if (lower.includes('order')) return 'Orders';
+      if (lower.includes('customer')) return 'Customers';
+      if (lower.includes('product')) return 'Products';
+      return this.sanitizeSheetName(this.formatName(sourceName));
+    }
+
+    // 4. Default generic
+    return 'Analysis Results';
+  }
+
+  private static formatName(str: string): string {
+    return str
+      .replace(/[_-]/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase())
+      .trim();
+  }
+
+  /**
+   * Triggers a browser download of the supplied Excel binary buffer.
+   */
+  public static triggerDownload(buffer: Uint8Array, filename: string): void {
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      const safeFilename = filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`;
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = URL.createObjectURL(blob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = url;
+      downloadLink.download = safeFilename;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
   }
 
   /**

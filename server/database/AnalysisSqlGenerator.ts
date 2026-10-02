@@ -647,13 +647,17 @@ export class AnalysisSqlGenerator {
       expr = `(${col1} ${config.operator} ${col2})`;
     }
 
-    const sql = this.dialect.formatLimit(`SELECT\n    ${col1},\n    ${col2},\n    ${expr} AS ${alias},\n    *\nFROM ${fullTable}`, limit) + ';';
+    const sql = this.dialect.formatLimit(`SELECT\n    *,\n    ${expr} AS ${alias}\nFROM ${fullTable}`, limit) + ';';
+
+    AnalysisSqlGenerator.validateNoPlaceholders(sql);
+
+    const tableDisplay = this.formatTableDisplay(schema, tableName);
 
     return {
       name: `Calculated Column (${config.alias})`,
       category: 'CALCULATIONS',
-      description: `Compute ${config.col1} config.operator ${config.col2} as ${config.alias}`,
-      tablesUsed: [`${schema}.${tableName}`],
+      description: `Compute ${config.col1} ${config.operator} ${config.col2} as ${config.alias}`,
+      tablesUsed: [tableDisplay],
       columnsUsed: [config.col1, config.col2],
       sql
     };

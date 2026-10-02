@@ -51,7 +51,7 @@ interface AnalysisStudioProps {
   selectedTable: DiscoveredTable | null;
   allTables: DiscoveredTable[];
   onSelectTable: (table: DiscoveredTable) => void;
-  onExecuteQuery: (sql: string) => Promise<QueryExecutionResult>;
+  onExecuteQuery: (sql: string, queryMeta?: GeneratedAnalysisQuery) => Promise<QueryExecutionResult>;
   onEditInEditor: (sql: string) => void;
   isRunningQuery?: boolean;
   onAddToDashboard?: (query: GeneratedAnalysisQuery) => void;
@@ -240,7 +240,7 @@ export const AnalysisStudio: React.FC<AnalysisStudioProps> = ({
   const handleRunQuery = async (sql: string, queryMeta: GeneratedAnalysisQuery) => {
     saveHistoryItem(queryMeta);
     setIsModalOpen(false);
-    await onExecuteQuery(sql);
+    await onExecuteQuery(sql, queryMeta);
   };
 
   const handleEditInEditor = (sql: string) => {
@@ -253,7 +253,14 @@ export const AnalysisStudio: React.FC<AnalysisStudioProps> = ({
     if (action === 'edit') {
       onEditInEditor(item.sql);
     } else {
-      await onExecuteQuery(item.sql);
+      await onExecuteQuery(item.sql, {
+        name: item.name,
+        category: item.category,
+        description: item.summary,
+        tablesUsed: item.tables,
+        columnsUsed: item.columns,
+        sql: item.sql
+      });
     }
   };
 
