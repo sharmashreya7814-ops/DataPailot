@@ -183,7 +183,10 @@ export class AnalysisSqlGenerator {
       { pattern: /\breturnDateCol\b/, name: 'returnDateCol' },
       { pattern: /\brecencyExpr\b/, name: 'recencyExpr' },
       { pattern: /\bmonetaryExpr\b/, name: 'monetaryExpr' },
-      { pattern: /\baovExpr\b/, name: 'aovExpr' }
+      { pattern: /\baovExpr\b/, name: 'aovExpr' },
+      { pattern: /\bgroupCol\b/, name: 'groupCol' },
+      { pattern: /\brankCol\b/, name: 'rankCol' },
+      { pattern: /\bconfig\.[a-zA-Z0-9_]+\b/, name: 'config.property' }
     ];
 
     for (const { pattern, name } of placeholderPatterns) {
@@ -1039,27 +1042,36 @@ ORDER BY period ASC`, limit) + ';';
     const fullTable = this.quoteTable(schema, tableName);
     const groupCol = this.quoteIdentifier(config.groupColumn);
     const rankCol = this.quoteIdentifier(config.rankingColumn);
-    const func = config.rankingMethod || 'DENSE_RANK';
+    const n = Math.max(1, Number(config.n) || 5);
+    const direction = (config.direction && String(config.direction).toUpperCase() === 'ASC') ? 'ASC' : 'DESC';
+    const validMethods = ['ROW_NUMBER', 'DENSE_RANK', 'RANK'];
+    const func = config.rankingMethod && validMethods.includes(String(config.rankingMethod).toUpperCase())
+      ? String(config.rankingMethod).toUpperCase()
+      : 'ROW_NUMBER';
 
-    const sql = `WITH ranked_records AS (
+    const sql = `WITH ranked AS (
     SELECT
         *,
         ${func}() OVER (
-            PARTITION BY groupCol
-            ORDER BY rankCol config.direction
-        ) AS rank_in_group
+            PARTITION BY ${groupCol}
+            ORDER BY ${rankCol} ${direction}
+        ) AS rank
     FROM ${fullTable}
 )
 SELECT *
-FROM ranked_records
-WHERE rank_in_group <= ${config.n}
-ORDER BY groupCol ASC, rank_in_group ASC;`;
+FROM ranked
+WHERE rank <= ${n}
+ORDER BY ${groupCol} ASC, rank ASC;`;
+
+    AnalysisSqlGenerator.validateNoPlaceholders(sql, `Top N per ${config.groupColumn}`);
+
+    const tableDisplay = this.formatTableDisplay(schema, tableName);
 
     return {
-      name: `Top ${config.n} per ${config.groupColumn}`,
+      name: `Top ${n} per ${config.groupColumn}`,
       category: 'RANKING',
-      description: `Retrieve the top ${config.n} rows within each ${config.groupColumn} ranked by ${config.rankingColumn}`,
-      tablesUsed: [`${schema}.${tableName}`],
+      description: `Retrieve the top ${n} rows within each ${config.groupColumn} ranked by ${config.rankingColumn} (${direction})`,
+      tablesUsed: [tableDisplay],
       columnsUsed: [config.groupColumn, config.rankingColumn],
       sql
     };

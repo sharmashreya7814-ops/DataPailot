@@ -32,9 +32,9 @@ export const WindowFunctionsBuilder: React.FC<WindowFunctionsBuilderProps> = ({
   // Tab 2: Top N Per Group Config
   const [groupCol, setGroupCol] = useState<string>(defaultGroup);
   const [rankingCol, setRankingCol] = useState<string>(defaultNumeric);
-  const [topN, setTopN] = useState<number>(3);
+  const [topN, setTopN] = useState<number>(5);
   const [rankDirection, setRankDirection] = useState<'DESC' | 'ASC'>('DESC');
-  const [rankMethod, setRankMethod] = useState<'DENSE_RANK' | 'ROW_NUMBER' | 'RANK'>('DENSE_RANK');
+  const [rankMethod, setRankMethod] = useState<'ROW_NUMBER' | 'DENSE_RANK' | 'RANK'>('ROW_NUMBER');
 
   const addPartitionCol = () => {
     const unused = table.columns.find(c => !partitionCols.includes(c.name));
@@ -108,7 +108,7 @@ export const WindowFunctionsBuilder: React.FC<WindowFunctionsBuilderProps> = ({
           </div>
 
           <div className="p-5 bg-slate-900 border border-slate-800 rounded-xl space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div>
                 <label className="text-xs font-medium text-slate-300 block mb-1">
                   Group / Partition Column:
@@ -152,7 +152,7 @@ export const WindowFunctionsBuilder: React.FC<WindowFunctionsBuilderProps> = ({
                   min="1"
                   max="100"
                   value={topN}
-                  onChange={e => setTopN(Math.max(1, parseInt(e.target.value) || 3))}
+                  onChange={e => setTopN(Math.max(1, parseInt(e.target.value) || 5))}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none"
                 />
               </div>
@@ -168,6 +168,21 @@ export const WindowFunctionsBuilder: React.FC<WindowFunctionsBuilderProps> = ({
                 >
                   <option value="DESC">Highest First (DESC)</option>
                   <option value="ASC">Lowest First (ASC)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-slate-300 block mb-1">
+                  Ranking Method:
+                </label>
+                <select
+                  value={rankMethod}
+                  onChange={e => setRankMethod(e.target.value as any)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none"
+                >
+                  <option value="ROW_NUMBER">ROW_NUMBER (Exact Top N)</option>
+                  <option value="DENSE_RANK">DENSE_RANK (Ties Keep Same)</option>
+                  <option value="RANK">RANK (Ties Skip Ranks)</option>
                 </select>
               </div>
             </div>
@@ -188,7 +203,7 @@ export const WindowFunctionsBuilder: React.FC<WindowFunctionsBuilderProps> = ({
           <div className="flex items-center space-x-2 text-xs text-slate-400 bg-slate-900/60 p-3 rounded-lg border border-slate-800">
             <Layers className="w-4 h-4 text-indigo-400 flex-shrink-0" />
             <span>
-              Build PostgreSQL window calculations (ROW_NUMBER, DENSE_RANK, NTILE, LAG, LEAD, FIRST_VALUE, SUM OVER) with partition and order specifications.
+              Build SQL window calculations (ROW_NUMBER, DENSE_RANK, NTILE, LAG, LEAD, FIRST_VALUE, SUM OVER) with partition and order specifications.
             </span>
           </div>
 

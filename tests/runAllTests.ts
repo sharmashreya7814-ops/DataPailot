@@ -44,6 +44,7 @@ import { runAnalysisFilteringFlowTests } from './testAnalysisFilteringFlow';
 import { runAnalysisCalculationOrderingTests } from './testAnalysisCalculationOrdering';
 import { runAnalysisExcelExportWorkflowTests } from './testAnalysisExcelExportWorkflow';
 import { runAnalysisDateAnalysisDialectsTests } from './testAnalysisDateAnalysisDialects';
+import { runAnalysisRankingTopNPerGroupTests } from './testAnalysisRankingTopNPerGroup';
 
 console.log('\n============================================================');
 console.log('DATAPILOT PHASE 8: AUTOMATED TEST SUITE & REGRESSION MATRIX');
@@ -100,7 +101,8 @@ export const suites: TestGroup[] = [
   { name: '39. ANALYSIS TOOLKIT FILTERING FLOW FOR IMPORTED DATASETS & CONNECTED DBS', runner: runAnalysisFilteringFlowTests },
   { name: '40. ANALYSIS TOOLKIT CALCULATIONS RESULT-COLUMN ORDERING', runner: runAnalysisCalculationOrderingTests },
   { name: '41. ANALYSIS TOOLKIT EXCEL EXPORT WORKFLOW (MULTI-SHEET WORKBOOK)', runner: runAnalysisExcelExportWorkflowTests },
-  { name: '42. ANALYSIS TOOLKIT DATE ANALYSIS (SQLITE & MULTI-DIALECT COMPATIBILITY)', runner: runAnalysisDateAnalysisDialectsTests }
+  { name: '42. ANALYSIS TOOLKIT DATE ANALYSIS (SQLITE & MULTI-DIALECT COMPATIBILITY)', runner: runAnalysisDateAnalysisDialectsTests },
+  { name: '43. ANALYSIS TOOLKIT RANKING (TOP N PER GROUP & SQLITE COMPATIBILITY)', runner: runAnalysisRankingTopNPerGroupTests }
 ];
 
 async function runAll() {
