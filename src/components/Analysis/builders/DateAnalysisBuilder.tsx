@@ -64,7 +64,7 @@ export const DateAnalysisBuilder: React.FC<DateAnalysisBuilderProps> = ({
       <div className="flex items-center space-x-2 text-xs text-slate-400 bg-slate-900/60 p-3 rounded-lg border border-slate-800">
         <Calendar className="w-4 h-4 text-emerald-400 flex-shrink-0" />
         <span>
-          Perform PostgreSQL time-series aggregations, Month-over-Month growth calculations, running totals, and rolling moving averages.
+          Perform time-series aggregations, Month-over-Month growth calculations, running totals, and rolling moving averages.
         </span>
       </div>
 
@@ -78,7 +78,7 @@ export const DateAnalysisBuilder: React.FC<DateAnalysisBuilderProps> = ({
             {
               id: 'trend',
               title: 'Time-Series Trend',
-              desc: 'Daily, Weekly, Monthly, or Yearly breakdown using DATE_TRUNC',
+              desc: 'Daily, Weekly, Monthly, or Yearly breakdown by period',
               icon: BarChart2
             },
             {

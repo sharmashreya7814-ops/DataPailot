@@ -117,7 +117,8 @@ export class MySQLAdapter extends AbstractDatabaseAdapter {
           return `\`${schema.replace(/`/g, '``')}\`.${t}`;
         }
         return t;
-      }
+      },
+      dialectType: 'mysql'
     };
   }
 

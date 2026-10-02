@@ -43,6 +43,7 @@ import { runPreviewGeneratedSqlTests } from './testPreviewGeneratedSql';
 import { runAnalysisFilteringFlowTests } from './testAnalysisFilteringFlow';
 import { runAnalysisCalculationOrderingTests } from './testAnalysisCalculationOrdering';
 import { runAnalysisExcelExportWorkflowTests } from './testAnalysisExcelExportWorkflow';
+import { runAnalysisDateAnalysisDialectsTests } from './testAnalysisDateAnalysisDialects';
 
 console.log('\n============================================================');
 console.log('DATAPILOT PHASE 8: AUTOMATED TEST SUITE & REGRESSION MATRIX');
@@ -98,7 +99,8 @@ export const suites: TestGroup[] = [
   { name: '38. PREVIEW GENERATED SQL IN EASY DATA ANALYSIS TOOLKIT', runner: runPreviewGeneratedSqlTests },
   { name: '39. ANALYSIS TOOLKIT FILTERING FLOW FOR IMPORTED DATASETS & CONNECTED DBS', runner: runAnalysisFilteringFlowTests },
   { name: '40. ANALYSIS TOOLKIT CALCULATIONS RESULT-COLUMN ORDERING', runner: runAnalysisCalculationOrderingTests },
-  { name: '41. ANALYSIS TOOLKIT EXCEL EXPORT WORKFLOW (MULTI-SHEET WORKBOOK)', runner: runAnalysisExcelExportWorkflowTests }
+  { name: '41. ANALYSIS TOOLKIT EXCEL EXPORT WORKFLOW (MULTI-SHEET WORKBOOK)', runner: runAnalysisExcelExportWorkflowTests },
+  { name: '42. ANALYSIS TOOLKIT DATE ANALYSIS (SQLITE & MULTI-DIALECT COMPATIBILITY)', runner: runAnalysisDateAnalysisDialectsTests }
 ];
 
 async function runAll() {

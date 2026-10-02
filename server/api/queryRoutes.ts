@@ -21,7 +21,8 @@ const sqliteDialect: SqlDialect = {
   formatPagination: (sql: string, limit: number, offset: number) => `${sql} LIMIT ${limit} OFFSET ${offset}`,
   formatDate: (date: Date) => `'${date.toISOString()}'`,
   formatExplain: (sql: string) => `EXPLAIN QUERY PLAN ${sql}`,
-  qualifyTable: (schema: string | undefined, table: string) => `"${table.replace(/"/g, '""')}"`
+  qualifyTable: (schema: string | undefined, table: string) => `"${table.replace(/"/g, '""')}"`,
+  dialectType: 'sqlite'
 };
 
 /**

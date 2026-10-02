@@ -6,4 +6,5 @@ export interface SqlDialect {
   formatExplain(sql: string): string;
   qualifyTable(schema: string | undefined, table: string): string;
   requiresOrderByForLimit?: boolean;
+  dialectType?: 'sqlite' | 'postgresql' | 'mysql' | 'sqlserver' | 'oracle';
 }

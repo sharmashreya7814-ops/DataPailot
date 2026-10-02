@@ -174,7 +174,8 @@ export class PostgreSQLAdapter extends AbstractDatabaseAdapter {
       formatPagination: (sql: string, limit: number, offset: number) => `${sql}\nLIMIT ${limit} OFFSET ${offset}`,
       formatDate: (date: Date) => `'${date.toISOString()}'::timestamp`,
       formatExplain: (sql: string) => `EXPLAIN ${sql}`,
-      qualifyTable: (schema: string | undefined, table: string) => schema ? `"${schema}"."${table}"` : `"${table}"`
+      qualifyTable: (schema: string | undefined, table: string) => schema ? `"${schema}"."${table}"` : `"${table}"`,
+      dialectType: 'postgresql'
     };
   }
 

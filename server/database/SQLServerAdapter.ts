@@ -129,7 +129,8 @@ export class SQLServerAdapter extends AbstractDatabaseAdapter {
           return `[${schema.replace(/\]/g, ']]')}].${t}`;
         }
         return t;
-      }
+      },
+      dialectType: 'sqlserver'
     };
   }
 

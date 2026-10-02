@@ -49,6 +49,103 @@ export class AnalysisSqlGenerator {
   }
 
   /**
+   * Resolves the dialect type (sqlite, postgresql, mysql, sqlserver, oracle)
+   */
+  public getDialectType(schema?: string): 'sqlite' | 'postgresql' | 'mysql' | 'sqlserver' | 'oracle' {
+    if (schema === 'imported') {
+      return 'sqlite';
+    }
+    if (this.dialect.dialectType) {
+      return this.dialect.dialectType;
+    }
+    const testId = this.dialect.quoteIdentifier('x');
+    if (testId === '[x]') return 'sqlserver';
+    if (testId === '`x`') return 'mysql';
+    if (this.dialect.formatExplain && this.dialect.formatExplain('x').includes('EXPLAIN QUERY PLAN')) {
+      return 'sqlite';
+    }
+    const testDate = this.dialect.formatDate(new Date());
+    if (testDate.startsWith('TIMESTAMP')) return 'oracle';
+    return 'postgresql';
+  }
+
+  /**
+   * Formats a date period truncation expression tailored for the active dialect
+   */
+  public formatDateTrunc(
+    dateCol: string,
+    period: 'day' | 'week' | 'month' | 'quarter' | 'year' = 'month',
+    schema?: string
+  ): string {
+    const dialectType = this.getDialectType(schema);
+    switch (dialectType) {
+      case 'sqlite': {
+        switch (period) {
+          case 'year':
+            return `strftime('%Y', ${dateCol})`;
+          case 'day':
+            return `strftime('%Y-%m-%d', ${dateCol})`;
+          case 'week':
+            return `strftime('%Y-%W', ${dateCol})`;
+          case 'quarter':
+            return `(strftime('%Y', ${dateCol}) || '-Q' || ((CAST(strftime('%m', ${dateCol}) AS INTEGER) + 2) / 3))`;
+          case 'month':
+          default:
+            return `strftime('%Y-%m', ${dateCol})`;
+        }
+      }
+      case 'mysql': {
+        switch (period) {
+          case 'year':
+            return `DATE_FORMAT(${dateCol}, '%Y')`;
+          case 'day':
+            return `DATE_FORMAT(${dateCol}, '%Y-%m-%d')`;
+          case 'week':
+            return `DATE_FORMAT(${dateCol}, '%Y-%u')`;
+          case 'quarter':
+            return `CONCAT(YEAR(${dateCol}), '-Q', QUARTER(${dateCol}))`;
+          case 'month':
+          default:
+            return `DATE_FORMAT(${dateCol}, '%Y-%m')`;
+        }
+      }
+      case 'sqlserver': {
+        switch (period) {
+          case 'year':
+            return `FORMAT(${dateCol}, 'yyyy')`;
+          case 'day':
+            return `FORMAT(${dateCol}, 'yyyy-MM-dd')`;
+          case 'week':
+            return `DATEPART(week, ${dateCol})`;
+          case 'quarter':
+            return `CONCAT(YEAR(${dateCol}), '-Q', DATEPART(quarter, ${dateCol}))`;
+          case 'month':
+          default:
+            return `FORMAT(${dateCol}, 'yyyy-MM')`;
+        }
+      }
+      case 'oracle': {
+        switch (period) {
+          case 'year':
+            return `TRUNC(${dateCol}, 'YYYY')`;
+          case 'day':
+            return `TRUNC(${dateCol}, 'DD')`;
+          case 'week':
+            return `TRUNC(${dateCol}, 'IW')`;
+          case 'quarter':
+            return `TRUNC(${dateCol}, 'Q')`;
+          case 'month':
+          default:
+            return `TRUNC(${dateCol}, 'MM')`;
+        }
+      }
+      case 'postgresql':
+      default:
+        return `DATE_TRUNC('${period}', ${dateCol})`;
+    }
+  }
+
+  /**
    * Safely escapes string literals for SQL values
    */
   public static escapeLiteral(val: string): string {
@@ -68,7 +165,25 @@ export class AnalysisSqlGenerator {
       { pattern: /\bfilter_condition\b/i, name: 'filter_condition' },
       { pattern: /\bundefined\b/, name: 'undefined' },
       { pattern: /\[object Object\]/, name: '[object Object]' },
-      { pattern: /\bNaN\b/, name: 'NaN' }
+      { pattern: /\bNaN\b/, name: 'NaN' },
+      { pattern: /\bmeasureExpr\b/, name: 'measureExpr' },
+      { pattern: /\bdateExpr\b/, name: 'dateExpr' },
+      { pattern: /\bcolumnExpr\b/, name: 'columnExpr' },
+      { pattern: /\bperiodExpr\b/, name: 'periodExpr' },
+      { pattern: /\bwindowSize\b/, name: 'windowSize' },
+      { pattern: /\brevCol\b/, name: 'revCol' },
+      { pattern: /\bdimCol\b/, name: 'dimCol' },
+      { pattern: /\bamountCol\b/, name: 'amountCol' },
+      { pattern: /\bcustId\b/, name: 'custId' },
+      { pattern: /\bprodCol\b/, name: 'prodCol' },
+      { pattern: /\bmeasureCol\b/, name: 'measureCol' },
+      { pattern: /\buserCol\b/, name: 'userCol' },
+      { pattern: /\bfirstDateCol\b/, name: 'firstDateCol' },
+      { pattern: /\bactDateCol\b/, name: 'actDateCol' },
+      { pattern: /\breturnDateCol\b/, name: 'returnDateCol' },
+      { pattern: /\brecencyExpr\b/, name: 'recencyExpr' },
+      { pattern: /\bmonetaryExpr\b/, name: 'monetaryExpr' },
+      { pattern: /\baovExpr\b/, name: 'aovExpr' }
     ];
 
     for (const { pattern, name } of placeholderPatterns) {
@@ -674,21 +789,26 @@ export class AnalysisSqlGenerator {
   ): GeneratedAnalysisQuery {
     const fullTable = this.quoteTable(schema, tableName);
     const dateCol = this.quoteIdentifier(config.dateColumn);
-    const period = config.period;
+    const period = config.period || 'month';
 
     const measureExpr = config.measureColumn === '*'
       ? 'COUNT(*)'
-      : `${config.measureFunction}(${this.quoteIdentifier(config.measureColumn)})`;
+      : `${config.measureFunction || 'SUM'}(${this.quoteIdentifier(config.measureColumn)})`;
+
+    let sql = '';
+    let name = '';
+    let description = '';
 
     switch (config.mode) {
       case 'mom': {
-        const sql = `WITH monthly_data AS (
+        const periodExpr = this.formatDateTrunc(dateCol, 'month', schema);
+        sql = `WITH monthly_data AS (
     SELECT
-        DATE_TRUNC('month', ${dateCol}) AS period,
-        measureExpr AS current_value
+        ${periodExpr} AS period,
+        ${measureExpr} AS current_value
     FROM ${fullTable}
     WHERE ${dateCol} IS NOT NULL
-    GROUP BY 1
+    GROUP BY ${periodExpr}
 )
 SELECT
     period,
@@ -702,24 +822,20 @@ SELECT
 FROM monthly_data
 ORDER BY period ASC;`;
 
-        return {
-          name: 'Month-over-Month (MoM) Growth',
-          category: 'DATE_ANALYSIS',
-          description: `Compute Month-over-Month percentage growth using LAG()`,
-          tablesUsed: [`${schema}.${tableName}`],
-          columnsUsed: [config.dateColumn, config.measureColumn],
-          sql
-        };
+        name = 'Month-over-Month (MoM) Growth';
+        description = `Compute Month-over-Month percentage growth using LAG()`;
+        break;
       }
 
       case 'yoy': {
-        const sql = `WITH yearly_data AS (
+        const periodExpr = this.formatDateTrunc(dateCol, 'year', schema);
+        sql = `WITH yearly_data AS (
     SELECT
-        DATE_TRUNC('year', ${dateCol}) AS period,
-        measureExpr AS current_value
+        ${periodExpr} AS period,
+        ${measureExpr} AS current_value
     FROM ${fullTable}
     WHERE ${dateCol} IS NOT NULL
-    GROUP BY 1
+    GROUP BY ${periodExpr}
 )
 SELECT
     period,
@@ -733,39 +849,31 @@ SELECT
 FROM yearly_data
 ORDER BY period ASC;`;
 
-        return {
-          name: 'Year-over-Year (YoY) Growth',
-          category: 'DATE_ANALYSIS',
-          description: `Compute Year-over-Year growth comparison using LAG()`,
-          tablesUsed: [`${schema}.${tableName}`],
-          columnsUsed: [config.dateColumn, config.measureColumn],
-          sql
-        };
+        name = 'Year-over-Year (YoY) Growth';
+        description = `Compute Year-over-Year growth comparison using LAG()`;
+        break;
       }
 
       case 'running_sum': {
-        const sql = this.dialect.formatLimit(`SELECT
+        const valCol = config.measureColumn !== '*' ? this.quoteIdentifier(config.measureColumn) : '1';
+        const selectEntry = config.measureColumn !== '*' ? valCol : '1 AS entry';
+        sql = this.dialect.formatLimit(`SELECT
     ${dateCol},
-    ${config.measureColumn} !== '*' ? this.quoteIdentifier(config.measureColumn) : '1 AS entry',
-    SUM(${config.measureColumn} !== '*' ? this.quoteIdentifier(config.measureColumn) : '1') OVER (
+    ${selectEntry},
+    SUM(${valCol}) OVER (
         ORDER BY ${dateCol} ASC
     ) AS running_total
 FROM ${fullTable}
 WHERE ${dateCol} IS NOT NULL
 ORDER BY ${dateCol} ASC`, limit) + ';';
 
-        return {
-          name: 'Running Total (Cumulative SUM)',
-          category: 'DATE_ANALYSIS',
-          description: `Cumulative running SUM ordered by ${config.dateColumn}`,
-          tablesUsed: [`${schema}.${tableName}`],
-          columnsUsed: [config.dateColumn, config.measureColumn],
-          sql
-        };
+        name = 'Running Total (Cumulative SUM)';
+        description = `Cumulative running SUM ordered by ${config.dateColumn}`;
+        break;
       }
 
       case 'running_count': {
-        const sql = this.dialect.formatLimit(`SELECT
+        sql = this.dialect.formatLimit(`SELECT
     ${dateCol},
     COUNT(*) OVER (
         ORDER BY ${dateCol} ASC
@@ -774,25 +882,21 @@ FROM ${fullTable}
 WHERE ${dateCol} IS NOT NULL
 ORDER BY ${dateCol} ASC`, limit) + ';';
 
-        return {
-          name: 'Running Count (Cumulative Transactions)',
-          category: 'DATE_ANALYSIS',
-          description: `Cumulative event counter over time`,
-          tablesUsed: [`${schema}.${tableName}`],
-          columnsUsed: [config.dateColumn],
-          sql
-        };
+        name = 'Running Count (Cumulative Transactions)';
+        description = `Cumulative event counter over time`;
+        break;
       }
 
       case 'rolling_avg': {
         const windowSize = config.rollingWindow || 3;
-        const sql = `WITH aggregated AS (
+        const periodExpr = this.formatDateTrunc(dateCol, period, schema);
+        sql = `WITH aggregated AS (
     SELECT
-        DATE_TRUNC('period', ${dateCol}) AS period,
-        measureExpr AS metric_value
+        ${periodExpr} AS period,
+        ${measureExpr} AS metric_value
     FROM ${fullTable}
     WHERE ${dateCol} IS NOT NULL
-    GROUP BY 1
+    GROUP BY ${periodExpr}
 )
 SELECT
     period,
@@ -800,44 +904,51 @@ SELECT
     ROUND(
         AVG(metric_value) OVER (
             ORDER BY period ASC
-            ROWS BETWEEN windowSize - 1 PRECEDING AND CURRENT ROW
+            ROWS BETWEEN ${windowSize - 1} PRECEDING AND CURRENT ROW
         ),
         2
-    ) AS rolling_windowSize_period_avg
+    ) AS rolling_${windowSize}_${period}_avg
 FROM aggregated
 ORDER BY period ASC;`;
 
-        return {
-          name: `Rolling Average (windowSize-period)`,
-          category: 'DATE_ANALYSIS',
-          description: `Moving window average of ${config.measureColumn} over periodly intervals`,
-          tablesUsed: [`${schema}.${tableName}`],
-          columnsUsed: [config.dateColumn, config.measureColumn],
-          sql
-        };
+        name = `Rolling Average (${windowSize}-${period})`;
+        description = `Moving window average of ${config.measureColumn} over ${period}ly intervals`;
+        break;
       }
 
       case 'trend':
       default: {
-        const sql = this.dialect.formatLimit(`SELECT
-    DATE_TRUNC('period', ${dateCol}) AS period,
-    measureExpr AS total_metric,
+        const periodExpr = this.formatDateTrunc(dateCol, period, schema);
+        sql = this.dialect.formatLimit(`SELECT
+    ${periodExpr} AS period,
+    ${measureExpr} AS total_metric,
     COUNT(*) AS event_count
 FROM ${fullTable}
 WHERE ${dateCol} IS NOT NULL
-GROUP BY 1
-ORDER BY 1 ASC`, limit) + ';';
+GROUP BY ${periodExpr}
+ORDER BY period ASC`, limit) + ';';
 
-        return {
-          name: `period.toUpperCase() Trend Analysis`,
-          category: 'DATE_ANALYSIS',
-          description: `Aggregated time-series trend by period`,
-          tablesUsed: [`${schema}.${tableName}`],
-          columnsUsed: [config.dateColumn, config.measureColumn],
-          sql
-        };
+        name = `${period.toUpperCase()} Trend Analysis`;
+        description = `Aggregated time-series trend by ${period}`;
+        break;
       }
     }
+
+    AnalysisSqlGenerator.validateNoPlaceholders(sql, `Date Analysis: ${name}`);
+
+    const tableDisplay = this.formatTableDisplay(schema, tableName);
+    const columnsUsed = config.measureColumn && config.measureColumn !== '*'
+      ? [config.dateColumn, config.measureColumn]
+      : [config.dateColumn];
+
+    return {
+      name,
+      category: 'DATE_ANALYSIS',
+      description,
+      tablesUsed: [tableDisplay],
+      columnsUsed,
+      sql
+    };
   }
 
   /**
@@ -1083,39 +1194,54 @@ FROM ${fullTable};`;
     const userCol = this.quoteIdentifier(config.userIdColumn);
     const firstDateCol = this.quoteIdentifier(config.firstActivityDateColumn);
     const actDateCol = this.quoteIdentifier(config.activityDateColumn);
+    const cohortTrunc = this.formatDateTrunc(`MIN(${firstDateCol})`, 'month', schema);
+    const actTrunc = this.formatDateTrunc(`t.${actDateCol}`, 'month', schema);
+
+    const dialectType = this.getDialectType(schema);
+    let monthDiffExpr = `(DATE_PART('year', t.${actDateCol}) - DATE_PART('year', c.cohort_month)) * 12 + (DATE_PART('month', t.${actDateCol}) - DATE_PART('month', c.cohort_month))`;
+    if (dialectType === 'sqlite') {
+      monthDiffExpr = `((CAST(strftime('%Y', t.${actDateCol}) AS INTEGER) - CAST(strftime('%Y', c.cohort_month) AS INTEGER)) * 12 + (CAST(strftime('%m', t.${actDateCol}) AS INTEGER) - CAST(strftime('%m', c.cohort_month) AS INTEGER)))`;
+    } else if (dialectType === 'mysql') {
+      monthDiffExpr = `TIMESTAMPDIFF(MONTH, c.cohort_month, t.${actDateCol})`;
+    } else if (dialectType === 'sqlserver') {
+      monthDiffExpr = `DATEDIFF(month, c.cohort_month, t.${actDateCol})`;
+    } else if (dialectType === 'oracle') {
+      monthDiffExpr = `MONTHS_BETWEEN(TRUNC(t.${actDateCol}, 'MM'), c.cohort_month)`;
+    }
 
     const sql = `WITH user_cohorts AS (
     SELECT
-        userCol,
-        DATE_TRUNC('month', MIN(firstDateCol)) AS cohort_month
+        ${userCol},
+        ${cohortTrunc} AS cohort_month
     FROM ${fullTable}
-    WHERE firstDateCol IS NOT NULL
-    GROUP BY userCol
+    WHERE ${firstDateCol} IS NOT NULL
+    GROUP BY ${userCol}
 ),
 user_activities AS (
     SELECT
-        t.userCol,
+        t.${userCol},
         c.cohort_month,
-        DATE_TRUNC('month', t.actDateCol) AS activity_month,
-        (DATE_PART('year', t.actDateCol) - DATE_PART('year', c.cohort_month)) * 12 +
-        (DATE_PART('month', t.actDateCol) - DATE_PART('month', c.cohort_month)) AS month_number
+        ${actTrunc} AS activity_month,
+        ${monthDiffExpr} AS month_number
     FROM ${fullTable} t
-    JOIN user_cohorts c ON t.userCol = c.userCol
-    WHERE t.actDateCol IS NOT NULL
+    JOIN user_cohorts c ON t.${userCol} = c.${userCol}
+    WHERE t.${actDateCol} IS NOT NULL
 )
 SELECT
     cohort_month,
     month_number,
-    COUNT(DISTINCT userCol) AS active_users
+    COUNT(DISTINCT ${userCol}) AS active_users
 FROM user_activities
 GROUP BY cohort_month, month_number
 ORDER BY cohort_month ASC, month_number ASC;`;
+
+    AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Cohort Retention Matrix');
 
     return {
       name: 'Cohort Retention Matrix',
       category: 'ADVANCED_ANALYTICS',
       description: `Cohort analysis measuring monthly retention by cohort group`,
-      tablesUsed: [`${schema}.${tableName}`],
+      tablesUsed: [this.formatTableDisplay(schema, tableName)],
       columnsUsed: [config.userIdColumn, config.firstActivityDateColumn, config.activityDateColumn],
       sql
     };
@@ -1134,35 +1260,38 @@ ORDER BY cohort_month ASC, month_number ASC;`;
     const firstDateCol = this.quoteIdentifier(config.firstActivityDateColumn);
     const returnDateCol = this.quoteIdentifier(config.returnDateColumn);
     const unit = config.periodUnit || 'month';
+    const periodTrunc = this.formatDateTrunc(`MIN(${firstDateCol})`, unit as any, schema);
 
     const sql = `WITH first_events AS (
     SELECT
-        userCol,
-        DATE_TRUNC('unit', MIN(firstDateCol)) AS cohort_period
+        ${userCol},
+        ${periodTrunc} AS cohort_period
     FROM ${fullTable}
-    WHERE firstDateCol IS NOT NULL
-    GROUP BY userCol
+    WHERE ${firstDateCol} IS NOT NULL
+    GROUP BY ${userCol}
 )
 SELECT
     f.cohort_period,
-    COUNT(DISTINCT f.userCol) AS total_cohort_users,
-    COUNT(DISTINCT t.userCol) AS returning_users,
+    COUNT(DISTINCT f.${userCol}) AS total_cohort_users,
+    COUNT(DISTINCT t.${userCol}) AS returning_users,
     ROUND(
-        (COUNT(DISTINCT t.userCol) * 100.0) / NULLIF(COUNT(DISTINCT f.userCol), 0),
+        (COUNT(DISTINCT t.${userCol}) * 100.0) / NULLIF(COUNT(DISTINCT f.${userCol}), 0),
         2
     ) AS retention_rate_percent
 FROM first_events f
 LEFT JOIN ${fullTable} t
-    ON f.userCol = t.userCol
-    AND t.returnDateCol > f.cohort_period
+    ON f.${userCol} = t.${userCol}
+    AND t.${returnDateCol} > f.cohort_period
 GROUP BY f.cohort_period
 ORDER BY f.cohort_period ASC;`;
 
+    AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Retention Analysis');
+
     return {
-      name: `User Retention (unit.toUpperCase())`,
+      name: `User Retention (${unit.toUpperCase()})`,
       category: 'ADVANCED_ANALYTICS',
-      description: `Track return rates and retention percentages by unit`,
-      tablesUsed: [`${schema}.${tableName}`],
+      description: `Track return rates and retention percentages by ${unit}`,
+      tablesUsed: [this.formatTableDisplay(schema, tableName)],
       columnsUsed: [config.userIdColumn, config.firstActivityDateColumn, config.returnDateColumn],
       sql
     };
@@ -1197,11 +1326,13 @@ ORDER BY f.cohort_period ASC;`;
 
     const sql = `SELECT\n${stepCases.join(',\n')},\n${overallConversion}\nFROM ${fullTable};`;
 
+    AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Funnel Analysis');
+
     return {
       name: 'Event Funnel Analysis',
       category: 'ADVANCED_ANALYTICS',
-      description: `Track conversion rates across ${config.steps}.length funnel steps`,
-      tablesUsed: [`${schema}.${tableName}`],
+      description: `Track conversion rates across ${config.steps.length} funnel steps`,
+      tablesUsed: [this.formatTableDisplay(schema, tableName)],
       columnsUsed: [config.userIdColumn, config.eventColumn],
       sql
     };
@@ -1228,26 +1359,30 @@ ORDER BY f.cohort_period ASC;`;
     switch (template) {
       case 'rfm': {
         const recencyExpr = dateCol
-          ? `ROUND((EXTRACT(DAY FROM (NOW() - MAX(${dateCol})))) * 1.0, 0) AS recency_days`
+          ? (this.getDialectType(schema) === 'sqlite'
+              ? `ROUND((julianday('now') - julianday(MAX(${dateCol}))), 0) AS recency_days`
+              : `ROUND((EXTRACT(DAY FROM (NOW() - MAX(${dateCol})))) * 1.0, 0) AS recency_days`)
           : `'N/A' AS recency_days`;
         const monetaryExpr = amountCol
-          ? `ROUND((SUM(amountCol)) * 1.0, 2) AS monetary_total`
+          ? `ROUND((SUM(${amountCol})) * 1.0, 2) AS monetary_total`
           : `COUNT(*) AS monetary_total`;
 
         const sql = this.dialect.formatLimit(`SELECT
     ${custId},
-    recencyExpr,
+    ${recencyExpr},
     COUNT(*) AS frequency_orders,
-    monetaryExpr
+    ${monetaryExpr}
 FROM ${fullTable}
 GROUP BY ${custId}
 ORDER BY frequency_orders DESC`, 100) + ';';
+
+        AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Customer RFM');
 
         return {
           name: 'Customer RFM Analysis',
           category: 'CUSTOMER_ANALYSIS',
           description: `Recency, Frequency, and Monetary distribution per customer`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [this.formatTableDisplay(schema, tableName)],
           columnsUsed: [mapping.customerId, mapping.amountColumn, mapping.dateColumn].filter(Boolean) as string[],
           sql
         };
@@ -1257,17 +1392,19 @@ ORDER BY frequency_orders DESC`, 100) + ';';
         const spendExpr = amountCol ? `, ROUND((SUM(${amountCol})) * 1.0, 2) AS lifetime_spend` : '';
         const sql = this.dialect.formatLimit(`SELECT
     ${custId},
-    COUNT(*) AS order_countspendExpr
+    COUNT(*) AS order_count${spendExpr}
 FROM ${fullTable}
 GROUP BY ${custId}
 HAVING COUNT(*) > 1
 ORDER BY order_count DESC`, 100) + ';';
 
+        AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Repeat Customers');
+
         return {
           name: 'Repeat Customers (> 1 Purchase)',
           category: 'CUSTOMER_ANALYSIS',
           description: `Identify returning customers with repeat transaction volume`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [this.formatTableDisplay(schema, tableName)],
           columnsUsed: [mapping.customerId, mapping.amountColumn].filter(Boolean) as string[],
           sql
         };
@@ -1275,31 +1412,33 @@ ORDER BY order_count DESC`, 100) + ';';
 
       case 'aov': {
         const aovExpr = amountCol
-          ? `ROUND(((SUM(amountCol) / NULLIF(COUNT(*), 0))) * 1.0, 2) AS average_order_value`
+          ? `ROUND(((SUM(${amountCol}) / NULLIF(COUNT(*), 0))) * 1.0, 2) AS average_order_value`
           : `COUNT(*) AS order_count`;
 
         const baseSql = `SELECT
     ${custId},
     COUNT(*) AS total_orders,
     ${amountCol ? `ROUND((SUM(${amountCol})) * 1.0, 2) AS total_spend,` : ''}
-    aovExpr
+    ${aovExpr}
 FROM ${fullTable}
 GROUP BY ${custId}
 ORDER BY total_orders DESC`;
         const sql = this.dialect.formatLimit(baseSql, 100) + ';';
 
+        AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Customer AOV');
+
         return {
           name: 'Customer Average Order Value (AOV)',
           category: 'CUSTOMER_ANALYSIS',
           description: `Average order value and spend per customer`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [this.formatTableDisplay(schema, tableName)],
           columnsUsed: [mapping.customerId, mapping.amountColumn].filter(Boolean) as string[],
           sql
         };
       }
 
       case 'ranking': {
-        const orderMetric = amountCol ? `SUM(amountCol)` : 'COUNT(*)';
+        const orderMetric = amountCol ? `SUM(${amountCol})` : 'COUNT(*)';
         const baseSql = `SELECT
     ${custId},
     COUNT(*) AS total_orders,
@@ -1310,11 +1449,13 @@ GROUP BY ${custId}
 ORDER BY customer_rank ASC`;
         const sql = this.dialect.formatLimit(baseSql, 100) + ';';
 
+        AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Customer Ranking');
+
         return {
           name: 'Customer Value Ranking',
           category: 'CUSTOMER_ANALYSIS',
           description: `Rank customers by total value/orders using DENSE_RANK()`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [this.formatTableDisplay(schema, tableName)],
           columnsUsed: [mapping.customerId, mapping.amountColumn].filter(Boolean) as string[],
           sql
         };
@@ -1333,11 +1474,13 @@ GROUP BY ${custId}
 ORDER BY total_orders DESC`;
         const sql = this.dialect.formatLimit(baseSql, 100) + ';';
 
+        AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Customer Order Summary');
+
         return {
           name: 'Customer Order Summary',
           category: 'CUSTOMER_ANALYSIS',
           description: `Aggregate order metrics and lifetime dates per customer`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [this.formatTableDisplay(schema, tableName)],
           columnsUsed: [mapping.customerId, mapping.amountColumn, mapping.dateColumn].filter(Boolean) as string[],
           sql
         };
@@ -1365,21 +1508,24 @@ ORDER BY total_orders DESC`;
     switch (template) {
       case 'sales_by_month': {
         const dateCol = mapping.dateColumn ? this.quoteIdentifier(mapping.dateColumn) : 'created_at';
+        const periodExpr = this.formatDateTrunc(dateCol, 'month', schema);
         const sql = `SELECT
-    DATE_TRUNC('month', ${dateCol}) AS sales_month,
-    ROUND((SUM(revCol)) * 1.0, 2) AS total_revenue,
+    ${periodExpr} AS sales_month,
+    ROUND((SUM(${revCol})) * 1.0, 2) AS total_revenue,
     COUNT(*) AS order_count,
-    ROUND((AVG(revCol)) * 1.0, 2) AS avg_order_value
+    ROUND((AVG(${revCol})) * 1.0, 2) AS avg_order_value
 FROM ${fullTable}
 WHERE ${dateCol} IS NOT NULL
-GROUP BY 1
-ORDER BY 1 ASC;`;
+GROUP BY ${periodExpr}
+ORDER BY sales_month ASC;`;
+
+        AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Sales by Month');
 
         return {
           name: 'Monthly Sales Performance',
           category: 'SALES_ANALYSIS',
           description: `Monthly total sales, order count, and average order value`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [this.formatTableDisplay(schema, tableName)],
           columnsUsed: [mapping.revenueColumn, mapping.dateColumn].filter(Boolean) as string[],
           sql
         };
@@ -1388,22 +1534,24 @@ ORDER BY 1 ASC;`;
       case 'sales_by_dimension': {
         const dimCol = mapping.dimensionColumn ? this.quoteIdentifier(mapping.dimensionColumn) : 'category';
         const sql = this.dialect.formatLimit(`SELECT
-    dimCol AS category_or_region,
-    ROUND((SUM(revCol)) * 1.0, 2) AS total_revenue,
+    ${dimCol} AS category_or_region,
+    ROUND((SUM(${revCol})) * 1.0, 2) AS total_revenue,
     COUNT(*) AS transaction_count,
     ROUND(
-        (SUM(revCol) * 100.0) / NULLIF(SUM(SUM(revCol)) OVER (), 0),
+        (SUM(${revCol}) * 100.0) / NULLIF(SUM(SUM(${revCol})) OVER (), 0),
         2
     ) AS contribution_percent
 FROM ${fullTable}
-GROUP BY dimCol
+GROUP BY ${dimCol}
 ORDER BY total_revenue DESC`, 50) + ';';
 
+        AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Sales by Dimension');
+
         return {
-          name: `Sales by ${mapping.dimensionColumn} || 'Category'`,
+          name: `Sales by ${mapping.dimensionColumn || 'Category'}`,
           category: 'SALES_ANALYSIS',
           description: `Breakdown of sales revenue and contribution % by dimension`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [this.formatTableDisplay(schema, tableName)],
           columnsUsed: [mapping.revenueColumn, mapping.dimensionColumn].filter(Boolean) as string[],
           sql
         };
@@ -1413,17 +1561,19 @@ ORDER BY total_revenue DESC`, 50) + ';';
       default: {
         const sql = `SELECT
     COUNT(*) AS total_transactions,
-    ROUND((SUM(revCol)) * 1.0, 2) AS total_revenue,
-    ROUND((AVG(revCol)) * 1.0, 2) AS average_order_value,
-    MIN(revCol) AS min_transaction,
-    MAX(revCol) AS max_transaction
+    ROUND((SUM(${revCol})) * 1.0, 2) AS total_revenue,
+    ROUND((AVG(${revCol})) * 1.0, 2) AS average_order_value,
+    MIN(${revCol}) AS min_transaction,
+    MAX(${revCol}) AS max_transaction
 FROM ${fullTable};`;
+
+        AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Total Sales Overview');
 
         return {
           name: 'Total Sales Overview',
           category: 'SALES_ANALYSIS',
           description: `High-level sales revenue metrics and averages`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [this.formatTableDisplay(schema, tableName)],
           columnsUsed: [mapping.revenueColumn],
           sql
         };
@@ -1446,7 +1596,7 @@ FROM ${fullTable};`;
     const fullTable = this.quoteTable(schema, tableName);
     const prodCol = this.quoteIdentifier(mapping.productColumn);
     const measureCol = mapping.measureColumn ? this.quoteIdentifier(mapping.measureColumn) : null;
-    const metricExpr = measureCol ? `SUM(measureCol)` : 'COUNT(*)';
+    const metricExpr = measureCol ? `SUM(${measureCol})` : 'COUNT(*)';
 
     switch (template) {
       case 'product_contribution': {
@@ -1461,11 +1611,13 @@ FROM ${fullTable}
 GROUP BY ${prodCol}
 ORDER BY metric_volume DESC`, 50) + ';';
 
+        AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Product Contribution');
+
         return {
           name: 'Product Revenue Contribution %',
           category: 'PRODUCT_ANALYSIS',
           description: `Percentage share of total revenue per product using window functions`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [this.formatTableDisplay(schema, tableName)],
           columnsUsed: [mapping.productColumn, mapping.measureColumn].filter(Boolean) as string[],
           sql
         };
@@ -1480,11 +1632,13 @@ FROM ${fullTable}
 GROUP BY ${prodCol}
 ORDER BY product_rank ASC`, 50) + ';';
 
+        AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Product Ranking');
+
         return {
           name: 'Product Performance Ranking',
           category: 'PRODUCT_ANALYSIS',
           description: `Rank products by volume/revenue using DENSE_RANK()`,
-          tablesUsed: [`${schema}.${tableName}`],
+          tablesUsed: [this.formatTableDisplay(schema, tableName)],
           columnsUsed: [mapping.productColumn, mapping.measureColumn].filter(Boolean) as string[],
           sql
         };
@@ -1495,20 +1649,19 @@ ORDER BY product_rank ASC`, 50) + ';';
       default: {
         const baseSql = `SELECT
     ${prodCol} AS product_identifier,
-    COUNT(*) AS units_or_orders,
-    ${measureCol ? `ROUND((SUM(${measureCol})) * 1.0, 2) AS total_revenue,` : ''}
-    ${measureCol ? `ROUND((AVG(${measureCol})) * 1.0, 2) AS avg_price,` : ''}
-    1 AS status
+    COUNT(*) AS units_or_orders${measureCol ? `,\n    ROUND((SUM(${measureCol})) * 1.0, 2) AS total_revenue,\n    ROUND((AVG(${measureCol})) * 1.0, 2) AS avg_price` : ''}
 FROM ${fullTable}
 GROUP BY ${prodCol}
-ORDER BY ${metricExpr} DESC`;
+ORDER BY units_or_orders DESC`;
         const sql = this.dialect.formatLimit(baseSql, 50) + ';';
 
+        AnalysisSqlGenerator.validateNoPlaceholders(sql, 'Product Revenue');
+
         return {
-          name: 'Top Products by Performance',
+          name: 'Product Revenue & Volume',
           category: 'PRODUCT_ANALYSIS',
-          description: `Sales performance and order count per product`,
-          tablesUsed: [`${schema}.${tableName}`],
+          description: `Sales revenue and transaction quantity per product`,
+          tablesUsed: [this.formatTableDisplay(schema, tableName)],
           columnsUsed: [mapping.productColumn, mapping.measureColumn].filter(Boolean) as string[],
           sql
         };

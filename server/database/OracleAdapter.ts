@@ -140,7 +140,8 @@ export class OracleAdapter extends AbstractDatabaseAdapter {
           return `"${schema.replace(/"/g, '""')}".${t}`;
         }
         return t;
-      }
+      },
+      dialectType: 'oracle'
     };
   }
 
