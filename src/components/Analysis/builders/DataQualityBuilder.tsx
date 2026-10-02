@@ -167,7 +167,7 @@ export const DataQualityBuilder: React.FC<DataQualityBuilderProps> = ({
             <label className="text-xs font-medium text-slate-300 block">
               Select Column(s) that should be unique (Composite Key):
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 bg-slate-950 rounded-lg border border-slate-800">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 bg-slate-950 rounded-lg border border-slate-800 analysis-scroll-dark">
               {table.columns.map(col => {
                 const isChecked = duplicateCols.includes(col.name);
                 return (

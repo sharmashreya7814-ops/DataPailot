@@ -72,7 +72,7 @@ export const WindowFunctionsBuilder: React.FC<WindowFunctionsBuilderProps> = ({
   return (
     <div className="space-y-6">
       {/* Sub Tabs */}
-      <div className="flex items-center space-x-2 border-b border-slate-800 pb-3">
+      <div className="flex items-center space-x-2 border-b border-slate-800 pb-3 overflow-x-auto analysis-tabs-scroll">
         <button
           onClick={() => setActiveTab('top_per_group')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${

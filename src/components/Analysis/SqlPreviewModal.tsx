@@ -124,7 +124,7 @@ export const SqlPreviewModal: React.FC<SqlPreviewModalProps> = ({
         </div>
 
         {/* Body Metadata & SQL */}
-        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto analysis-scroll-dark">
           {/* Metadata badges: Tables & Columns used */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800">
@@ -192,7 +192,7 @@ export const SqlPreviewModal: React.FC<SqlPreviewModalProps> = ({
               </button>
             </div>
 
-            <pre className="p-4 rounded-lg bg-slate-950 border border-slate-800 font-mono text-xs text-emerald-300 leading-relaxed overflow-x-auto whitespace-pre selection:bg-emerald-900/50">
+            <pre className="p-4 rounded-lg bg-slate-950 border border-slate-800 font-mono text-xs text-emerald-300 leading-relaxed overflow-x-auto whitespace-pre selection:bg-emerald-900/50 analysis-tabs-scroll">
               {query.sql}
             </pre>
           </div>

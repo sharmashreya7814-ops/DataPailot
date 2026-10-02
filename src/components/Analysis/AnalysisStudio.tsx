@@ -74,7 +74,6 @@ const CATEGORIES: {
   { id: 'CALCULATIONS', label: 'Calculations', icon: Calculator, description: 'CASE statements & calculated expressions' },
   { id: 'DATE_ANALYSIS', label: 'Date Analysis', icon: Calendar, description: 'Time-series trends, MoM & YoY growth' },
   { id: 'RANKING', label: 'Ranking', icon: Award, description: 'Top N per group & leaderboard rankings' },
-  { id: 'WINDOW_FUNCTIONS', label: 'Window Functions', icon: Layers, description: 'OVER() partitions, moving frames, lags' },
   { id: 'CUSTOM_COLUMNS', label: 'Custom Columns', icon: Calculator, description: 'Calculated expressions & arithmetic columns' },
   { id: 'CUSTOMER_ANALYSIS', label: 'Customer Analysis', icon: Users, description: 'RFM, retention, repeat buyers, AOV' },
   { id: 'SALES_ANALYSIS', label: 'Sales Analysis', icon: DollarSign, description: 'Revenue trends, ticket sizes, dimension share' },
@@ -361,7 +360,7 @@ export const AnalysisStudio: React.FC<AnalysisStudioProps> = ({
       </div>
 
       {/* Categories Navigation Bar (Pill Scroll) */}
-      <div className="border-b border-slate-800 bg-slate-900/30 px-4 py-2 flex items-center space-x-2 overflow-x-auto no-scrollbar">
+      <div className="border-b border-slate-800 bg-slate-900/30 px-4 py-2 flex items-center space-x-2 overflow-x-auto analysis-tabs-scroll">
         {filteredCategories.map(cat => {
           const Icon = cat.icon;
           const isActive = activeCategory === cat.id;
@@ -383,7 +382,7 @@ export const AnalysisStudio: React.FC<AnalysisStudioProps> = ({
       </div>
 
       {/* Main Builder Container */}
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="flex-1 overflow-y-auto p-5 analysis-scroll-dark">
         <div className="max-w-5xl mx-auto space-y-6">
           {isLoadingDetails ? (
             <div className="h-64 flex flex-col items-center justify-center space-y-3 text-slate-400">

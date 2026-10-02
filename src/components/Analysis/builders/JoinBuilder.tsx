@@ -329,7 +329,7 @@ export const JoinBuilder: React.FC<JoinBuilderProps> = ({
               <span>{table.name} (t1)</span>
               <span className="text-[10px] text-slate-500">{table.columns.length} columns</span>
             </div>
-            <div className="space-y-1 max-h-40 overflow-y-auto">
+            <div className="space-y-1 max-h-40 overflow-y-auto analysis-scroll-dark">
               {table.columns.map(c => {
                 const isSelected = selectedColumns.some(sc => sc.tableKey === 'base' && sc.column === c.name);
                 return (
@@ -361,7 +361,7 @@ export const JoinBuilder: React.FC<JoinBuilderProps> = ({
                 {joinTableDetails?.columns.length || 0} columns
               </span>
             </div>
-            <div className="space-y-1 max-h-40 overflow-y-auto">
+            <div className="space-y-1 max-h-40 overflow-y-auto analysis-scroll-dark">
               {joinTableDetails?.columns.map(c => {
                 const isSelected = selectedColumns.some(sc => sc.tableKey === 'join' && sc.column === c.name);
                 return (

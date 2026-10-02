@@ -6,6 +6,64 @@ html, body, #root {
   min-height: 100%;
 }
 
+/* Analysis Toolkit Scoped Dark Scrollbar Utilities */
+.analysis-tabs-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.analysis-tabs-scroll::-webkit-scrollbar {
+  height: 5px;
+  width: 5px;
+}
+
+.analysis-tabs-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.analysis-tabs-scroll::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 9999px;
+}
+
+.analysis-tabs-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.7);
+}
+
+.analysis-scroll-dark {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(71, 85, 105, 0.5) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.analysis-scroll-dark::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.analysis-scroll-dark::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.analysis-scroll-dark::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.4);
+  border-radius: 9999px;
+}
+
+.analysis-scroll-dark::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @media print {
   @page {
     size: landscape;

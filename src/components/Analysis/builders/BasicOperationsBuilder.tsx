@@ -148,7 +148,7 @@ export const BasicOperationsBuilder: React.FC<BasicOperationsBuilderProps> = ({
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-2 bg-slate-950 rounded-lg border border-slate-800">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-2 bg-slate-950 rounded-lg border border-slate-800 analysis-scroll-dark">
               {table.columns.map(col => {
                 const isChecked = selectedColumns.includes(col.name);
                 return (
