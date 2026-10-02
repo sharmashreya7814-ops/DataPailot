@@ -40,6 +40,7 @@ import { runEmailVerificationTests } from './testEmailVerification';
 import { runRealEmailDeliveryTests } from './testPhase33RealEmailDelivery';
 import { runSchemaSyncAndSavedConnectionsTests } from './testSchemaSyncAndSavedConnections';
 import { runPreviewGeneratedSqlTests } from './testPreviewGeneratedSql';
+import { runAnalysisFilteringFlowTests } from './testAnalysisFilteringFlow';
 
 console.log('\n============================================================');
 console.log('DATAPILOT PHASE 8: AUTOMATED TEST SUITE & REGRESSION MATRIX');
@@ -92,7 +93,8 @@ export const suites: TestGroup[] = [
   { name: '35. EMAIL VERIFICATION & LIFECYCLE (PHASE 3.2)', runner: runEmailVerificationTests },
   { name: '36. REAL EMAIL DELIVERY & SECURITY (PHASE 3.3)', runner: runRealEmailDeliveryTests },
   { name: '37. SCHEMA SYNC WITH ANALYSIS TOOLKIT & SAVED DATABASE CONNECTIONS', runner: runSchemaSyncAndSavedConnectionsTests },
-  { name: '38. PREVIEW GENERATED SQL IN EASY DATA ANALYSIS TOOLKIT', runner: runPreviewGeneratedSqlTests }
+  { name: '38. PREVIEW GENERATED SQL IN EASY DATA ANALYSIS TOOLKIT', runner: runPreviewGeneratedSqlTests },
+  { name: '39. ANALYSIS TOOLKIT FILTERING FLOW FOR IMPORTED DATASETS & CONNECTED DBS', runner: runAnalysisFilteringFlowTests }
 ];
 
 async function runAll() {

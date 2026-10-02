@@ -57,20 +57,77 @@ export class AnalysisSqlGenerator {
   }
 
   /**
-   * Safely escapes values, distinguishing numeric values from strings
+   * Validates that generated SQL contains no placeholder text or unrendered templates
    */
-  public static formatValue(val: string): string {
-    const trimmed = val.trim();
+  public static validateNoPlaceholders(sql: string, context: string = 'query'): void {
+    // Strip string literals '...' so user values like 'first clause' aren't falsely flagged
+    const sqlWithoutLiterals = sql.replace(/'(?:''|[^'])*'/g, "''");
+
+    const placeholderPatterns: { pattern: RegExp; name: string }[] = [
+      { pattern: /\bclause\b/i, name: 'Clause' },
+      { pattern: /\bfilter_condition\b/i, name: 'filter_condition' },
+      { pattern: /\bundefined\b/, name: 'undefined' },
+      { pattern: /\[object Object\]/, name: '[object Object]' },
+      { pattern: /\bNaN\b/, name: 'NaN' }
+    ];
+
+    for (const { pattern, name } of placeholderPatterns) {
+      if (pattern.test(sqlWithoutLiterals)) {
+        throw new Error(`Invalid placeholder '${name}' detected in generated SQL (${context})`);
+      }
+    }
+
+    if (/\bWHERE\s+condition\b/i.test(sqlWithoutLiterals) || /\bAND\s+condition\b/i.test(sqlWithoutLiterals) || /\bOR\s+condition\b/i.test(sqlWithoutLiterals)) {
+      throw new Error(`Invalid placeholder 'condition' detected in generated SQL (${context})`);
+    }
+  }
+
+  /**
+   * Safely escapes values, distinguishing numeric values, dates, booleans from strings
+   */
+  public static formatValue(val: any): string {
+    if (val === null || val === undefined) return 'NULL';
+
+    if (typeof val === 'number') {
+      if (isNaN(val)) return 'NULL';
+      return String(val);
+    }
+
+    if (typeof val === 'boolean') {
+      return val ? 'true' : 'false';
+    }
+
+    if (val instanceof Date) {
+      if (isNaN(val.getTime())) return 'NULL';
+      return AnalysisSqlGenerator.escapeLiteral(val.toISOString().slice(0, 19).replace('T', ' '));
+    }
+
+    const trimmed = String(val).trim();
     if (trimmed === '') return "''";
-    // Check if cleanly numeric
-    if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
-      return trimmed;
+
+    // If enclosed in single or double quotes, strip outer quotes cleanly
+    let clean = trimmed;
+    if ((clean.startsWith("'") && clean.endsWith("'") && clean.length >= 2) ||
+        (clean.startsWith('"') && clean.endsWith('"') && clean.length >= 2)) {
+      clean = clean.slice(1, -1);
     }
+
+    // Check if cleanly numeric (standard integer or decimal, no leading zeroes unless '0' or '0.x')
+    if (/^[+-]?(?:0|[1-9]\d*)(\.\d+)?$/.test(clean)) {
+      return clean;
+    }
+
     // Check if boolean
-    if (trimmed.toLowerCase() === 'true' || trimmed.toLowerCase() === 'false') {
-      return trimmed.toLowerCase();
+    if (clean.toLowerCase() === 'true' || clean.toLowerCase() === 'false') {
+      return clean.toLowerCase();
     }
-    return AnalysisSqlGenerator.escapeLiteral(trimmed);
+
+    // Check if literal NULL
+    if (clean.toUpperCase() === 'NULL') {
+      return 'NULL';
+    }
+
+    return AnalysisSqlGenerator.escapeLiteral(clean);
   }
 
   /**
@@ -231,16 +288,17 @@ export class AnalysisSqlGenerator {
     limit: number = 100
   ): GeneratedAnalysisQuery {
     const fullTable = this.quoteTable(schema, tableName);
+    const tableDisplay = this.formatTableDisplay(schema, tableName);
     const cols = selectedColumns.length > 0
       ? selectedColumns.map(c => this.quoteIdentifier(c)).join(', ')
       : '*';
 
-    if (filters.length === 0) {
+    if (!filters || filters.length === 0) {
       return {
         name: 'Filtered Data',
         category: 'FILTERING',
-        description: `Unfiltered data from ${schema}.${tableName}`,
-        tablesUsed: [`${schema}.${tableName}`],
+        description: `Unfiltered data from ${tableDisplay}`,
+        tablesUsed: [tableDisplay],
         columnsUsed: selectedColumns,
         sql: this.dialect.formatLimit(`SELECT ${cols}\nFROM ${fullTable}`, limit) + ';'
       };
@@ -250,73 +308,109 @@ export class AnalysisSqlGenerator {
     const usedColumns = new Set<string>(selectedColumns);
 
     filters.forEach((f, idx) => {
+      if (!f || !f.column) return;
       usedColumns.add(f.column);
       const col = this.quoteIdentifier(f.column);
       let clause = '';
 
-      switch (f.operator) {
+      const op = (f.operator || '=').toUpperCase().trim();
+
+      switch (op) {
         case '=':
         case '!=':
+        case '<>':
         case '>':
         case '>=':
         case '<':
         case '<=':
-          clause = `${col} f.operator AnalysisSqlGenerator.formatValue(f.value)`;
+          clause = `${col} ${op === '<>' ? '!=' : op} ${AnalysisSqlGenerator.formatValue(f.value)}`;
           break;
         case 'LIKE':
-          clause = `${col} ILIKE ${AnalysisSqlGenerator.escapeLiteral(`%${f.value.trim()}%`)}`;
+        case 'CONTAINS':
+        case 'LIKE / CONTAINS':
+        case 'ILIKE': {
+          const rawVal = (f.value !== undefined && f.value !== null ? String(f.value) : '').trim();
+          const pattern = rawVal.includes('%') ? rawVal : `%${rawVal}%`;
+          clause = `${col} LIKE ${AnalysisSqlGenerator.escapeLiteral(pattern)}`;
           break;
+        }
         case 'IS NULL':
           clause = `${col} IS NULL`;
           break;
         case 'IS NOT NULL':
           clause = `${col} IS NOT NULL`;
           break;
-        case 'IN': {
-          const items = f.value
-            .split(',')
-            .map(s => s.trim())
-            .filter(Boolean)
-            .map(s => AnalysisSqlGenerator.formatValue(s))
-            .join(', ');
-          clause = `${col} IN (items.length ? items : "''")`;
-          break;
-        }
+        case 'IN':
         case 'NOT IN': {
-          const items = f.value
+          const rawItems = (f.value !== undefined && f.value !== null ? String(f.value) : '')
             .split(',')
             .map(s => s.trim())
-            .filter(Boolean)
-            .map(s => AnalysisSqlGenerator.formatValue(s))
-            .join(', ');
-          clause = `${col} NOT IN (items.length ? items : "''")`;
+            .filter(Boolean);
+          const formattedItems = rawItems.map(s => {
+            let clean = s;
+            if ((clean.startsWith("'") && clean.endsWith("'") && clean.length >= 2) ||
+                (clean.startsWith('"') && clean.endsWith('"') && clean.length >= 2)) {
+              clean = clean.slice(1, -1);
+            }
+            return AnalysisSqlGenerator.formatValue(clean);
+          });
+          const listStr = formattedItems.length > 0 ? formattedItems.join(', ') : "''";
+          clause = `${col} ${op === 'NOT IN' ? 'NOT IN' : 'IN'} (${listStr})`;
           break;
         }
         case 'BETWEEN': {
-          const val1 = AnalysisSqlGenerator.formatValue(f.value);
-          const val2 = AnalysisSqlGenerator.formatValue(f.value2 || f.value);
-          clause = `${col} BETWEEN val1 AND val2`;
+          let lower = f.value !== undefined && f.value !== null ? String(f.value).trim() : '';
+          let upper = f.value2 !== undefined && f.value2 !== null ? String(f.value2).trim() : '';
+          if (!upper && lower && (lower.includes(' AND ') || lower.includes(' and '))) {
+            const parts = lower.split(/\s+AND\s+/i);
+            lower = parts[0].trim();
+            upper = (parts[1] || '').trim();
+          } else if (!upper && lower && lower.includes(',')) {
+            const parts = lower.split(',');
+            lower = parts[0].trim();
+            upper = (parts[1] || '').trim();
+          }
+          const val1 = AnalysisSqlGenerator.formatValue(lower);
+          const val2 = AnalysisSqlGenerator.formatValue(upper !== '' ? upper : lower);
+          clause = `${col} BETWEEN ${val1} AND ${val2}`;
           break;
         }
         default:
-          clause = `${col} = AnalysisSqlGenerator.formatValue(f.value)`;
+          clause = `${col} = ${AnalysisSqlGenerator.formatValue(f.value)}`;
       }
 
       if (idx === 0) {
-        whereClauses.push(`    clause`);
+        whereClauses.push(clause);
       } else {
-        const logic = f.logic || 'AND';
-        whereClauses.push(`    logic clause`);
+        const logic = (f.logic || 'AND').toUpperCase();
+        whereClauses.push(`${logic} ${clause}`);
       }
     });
 
-    const sql = this.dialect.formatLimit(`SELECT\n    ${cols}\nFROM ${fullTable}\nWHERE\n${whereClauses.join('\n')}`, limit) + ';';
+    if (whereClauses.length === 0) {
+      return {
+        name: 'Filtered Data',
+        category: 'FILTERING',
+        description: `Unfiltered data from ${tableDisplay}`,
+        tablesUsed: [tableDisplay],
+        columnsUsed: selectedColumns,
+        sql: this.dialect.formatLimit(`SELECT ${cols}\nFROM ${fullTable}`, limit) + ';'
+      };
+    }
+
+    const whereSection = whereClauses.length === 1
+      ? `WHERE ${whereClauses[0]}`
+      : `WHERE\n  ${whereClauses.join('\n  ')}`;
+
+    const sql = this.dialect.formatLimit(`SELECT ${cols}\nFROM ${fullTable}\n${whereSection}`, limit) + ';';
+
+    AnalysisSqlGenerator.validateNoPlaceholders(sql, 'generateFilterQuery');
 
     return {
       name: 'Filtered Query',
       category: 'FILTERING',
-      description: `Data from ${schema}.${tableName} matching filters.length filter condition(s)`,
-      tablesUsed: [`${schema}.${tableName}`],
+      description: `Data from ${tableDisplay} matching ${filters.length} filter condition(s)`,
+      tablesUsed: [tableDisplay],
       columnsUsed: Array.from(usedColumns),
       sql
     };
@@ -395,7 +489,7 @@ export class AnalysisSqlGenerator {
         expr = `${agg.func}(${this.quoteIdentifier(agg.column)})`;
       }
 
-      selectItems.push(`${expr} AS safeAlias`);
+      selectItems.push(`${expr} AS ${safeAlias}`);
       if (idx === 0) {
         orderTarget = safeAlias;
       }
@@ -412,18 +506,20 @@ export class AnalysisSqlGenerator {
       } else {
         havingExpr = `${having.func}(${this.quoteIdentifier(having.column)})`;
       }
-      havingClause = `\nHAVING havingExpr having.operator AnalysisSqlGenerator.formatValue(having.value)`;
+      havingClause = `\nHAVING ${havingExpr} ${having.operator} ${AnalysisSqlGenerator.formatValue(having.value)}`;
     }
 
-    const orderClause = orderTarget ? `\nORDER BY orderTarget DESC` : `\nORDER BY 1 ASC`;
+    const orderClause = orderTarget ? `\nORDER BY ${orderTarget} DESC` : `\nORDER BY 1 ASC`;
 
     const sql = this.dialect.formatLimit(`SELECT\n    ${selectItems.join(',\n    ')}\nFROM ${fullTable}\nGROUP BY\n    ${groupExpressions.join(',\n    ')}${havingClause}${orderClause}`, limit) + ';';
+
+    const tableDisplay = this.formatTableDisplay(schema, tableName);
 
     return {
       name: `Group By (${groupColumns.join(', ')})`,
       category: 'GROUPING',
       description: `Grouped metrics by ${groupColumns.join(', ')}`,
-      tablesUsed: [`${schema}.${tableName}`],
+      tablesUsed: [tableDisplay],
       columnsUsed: Array.from(usedCols),
       sql
     };
@@ -517,11 +613,13 @@ export class AnalysisSqlGenerator {
 
     const sql = this.dialect.formatLimit(`SELECT\n    *,\n    CASE\n${whenClauses.join('\n')}\n${elseClause}\n    END AS ${alias}\nFROM ${fullTable}`, limit) + ';';
 
+    const tableDisplay = this.formatTableDisplay(schema, tableName);
+
     return {
-      name: `Category Column (${config.alias} || 'category')`,
+      name: `Category Column (${config.alias || 'category'})`,
       category: 'CUSTOM_COLUMNS',
       description: `Segment ${config.column} into categorical tiers using CASE`,
-      tablesUsed: [`${schema}.${tableName}`],
+      tablesUsed: [tableDisplay],
       columnsUsed: [config.column],
       sql
     };
@@ -781,16 +879,16 @@ ORDER BY 1 ASC`, limit) + ';';
         funcExpr = `LEAD(${target}, ${config.offset || 1}) ${overClause}`;
         break;
       case 'FIRST_VALUE':
-        funcExpr = `FIRST_VALUE(target) ${overClause}`;
+        funcExpr = `FIRST_VALUE(${target}) ${overClause}`;
         break;
       case 'LAST_VALUE':
-        funcExpr = `LAST_VALUE(target) ${overClause}`;
+        funcExpr = `LAST_VALUE(${target}) ${overClause}`;
         break;
       case 'SUM OVER':
-        funcExpr = `SUM(target) ${overClause}`;
+        funcExpr = `SUM(${target}) ${overClause}`;
         break;
       case 'AVG OVER':
-        funcExpr = `ROUND(AVG(target) ${overClause}, 2)`;
+        funcExpr = `ROUND(AVG(${target}) ${overClause}, 2)`;
         break;
       case 'COUNT OVER':
         funcExpr = `COUNT(*) ${overClause}`;
@@ -799,11 +897,13 @@ ORDER BY 1 ASC`, limit) + ';';
 
     const sql = this.dialect.formatLimit(`SELECT\n    *,\n    ${funcExpr} AS ${alias}\nFROM ${fullTable}`, limit) + ';';
 
+    const tableDisplay = this.formatTableDisplay(schema, tableName);
+
     return {
       name: `Window Function (${config.func})`,
       category: 'WINDOW_FUNCTIONS',
       description: `Compute ${config.func} over partitions`,
-      tablesUsed: [`${schema}.${tableName}`],
+      tablesUsed: [tableDisplay],
       columnsUsed: [
         ...(config.partitionColumns || []),
         config.orderColumn,

@@ -25,6 +25,20 @@ export const FilterBuilder: React.FC<FilterBuilderProps> = ({ table, onPreviewQu
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
+  // Sync filter columns when table changes
+  React.useEffect(() => {
+    if (table && table.columns && table.columns.length > 0) {
+      setFilters(prev => {
+        const validColNames = new Set(table.columns.map(c => c.name));
+        const firstCol = table.columns[0].name;
+        return prev.map(f => ({
+          ...f,
+          column: validColNames.has(f.column) ? f.column : firstCol
+        }));
+      });
+    }
+  }, [table?.schema, table?.name]);
+
   const addFilter = () => {
     setFilters(prev => [
       ...prev,
@@ -51,10 +65,13 @@ export const FilterBuilder: React.FC<FilterBuilderProps> = ({ table, onPreviewQu
     setIsGenerating(true);
     setGenerateError(null);
     try {
+      const activeFilters = filters.filter(
+        f => f.column && (['IS NULL', 'IS NOT NULL'].includes(f.operator) || String(f.value ?? '').trim().length > 0)
+      );
       const query = await DatabaseApiClient.generateAnalysis('generateFilterQuery', 
         table.schema,
         table.name,
-        filters.filter(f => f.column && (['IS NULL', 'IS NOT NULL'].includes(f.operator) || f.value.trim())),
+        activeFilters,
         selectedColumns,
         limit
       );
@@ -180,7 +197,7 @@ export const FilterBuilder: React.FC<FilterBuilderProps> = ({ table, onPreviewQu
 
       {/* Inline Error Message */}
       {generateError && (
-        <div className="p-3 rounded-lg bg-rose-950/50 border border-rose-800 text-rose-300 text-xs flex items-center space-x-2">
+        <div role="alert" className="p-3 rounded-lg bg-rose-950/50 border border-rose-800 text-rose-300 text-xs flex items-center space-x-2">
           <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
           <span>{generateError}</span>
         </div>
@@ -201,6 +218,7 @@ export const FilterBuilder: React.FC<FilterBuilderProps> = ({ table, onPreviewQu
         </div>
 
         <button
+          id="btn-preview-filtered-sql"
           onClick={handlePreview}
           disabled={isGenerating}
           className="flex items-center space-x-2 px-5 py-2.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-indigo-950/40"
