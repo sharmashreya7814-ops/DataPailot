@@ -3,7 +3,7 @@ import { Network, Users, ArrowRightLeft, Filter, Play, Sparkles, Plus, Trash2 } 
 import { DatabaseApiClient } from '../../../services/databaseApi';
 import { TableDetailsResult } from '../../../types/database';
 import { GeneratedAnalysisQuery } from '../../../types/analysis';
-import { classifyColumns } from '../../../utils/analysisCompatibility';
+import { classifyColumns, SmartFieldMapper } from '../../../utils/analysisCompatibility';
 
 interface AdvancedAnalyticsBuilderProps {
   table: TableDetailsResult;
@@ -17,9 +17,10 @@ export const AdvancedAnalyticsBuilder: React.FC<AdvancedAnalyticsBuilderProps> =
   const [activeAnalysis, setActiveAnalysis] = useState<'cohort' | 'retention' | 'funnel'>('cohort');
   const { idColumns, dateColumns, numericColumns, stringColumns } = classifyColumns(table.columns);
 
-  const defaultUserCol = idColumns[0]?.name || table.columns[0]?.name || '';
-  const defaultDateCol = dateColumns[0]?.name || table.columns.find(c => c.name.includes('date'))?.name || '';
-  const defaultRevCol = numericColumns[0]?.name || '';
+  const defaultUserCol = SmartFieldMapper.suggestColumn(table.columns, 'customer') || idColumns[0]?.name || table.columns[0]?.name || '';
+  const defaultDateCol = SmartFieldMapper.suggestColumn(table.columns, 'date') || dateColumns[0]?.name || '';
+  const defaultRevCol = SmartFieldMapper.suggestColumn(table.columns, 'monetary') || numericColumns[0]?.name || '';
+  const defaultEventCol = SmartFieldMapper.suggestColumn(table.columns, 'event') || stringColumns[0]?.name || table.columns[0]?.name || '';
 
   // 1. Cohort State
   const [cohortUserCol, setCohortUserCol] = useState<string>(defaultUserCol);
@@ -34,9 +35,7 @@ export const AdvancedAnalyticsBuilder: React.FC<AdvancedAnalyticsBuilderProps> =
 
   // 3. Funnel State
   const [funnelUserCol, setFunnelUserCol] = useState<string>(defaultUserCol);
-  const [funnelStepCol, setFunnelStepCol] = useState<string>(
-    stringColumns[0]?.name || table.columns[0]?.name || ''
-  );
+  const [funnelStepCol, setFunnelStepCol] = useState<string>(defaultEventCol);
   const [funnelSteps, setFunnelSteps] = useState<string[]>([
     'page_view',
     'add_to_cart',

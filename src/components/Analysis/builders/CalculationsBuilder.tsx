@@ -3,7 +3,7 @@ import { Plus, Trash2, Calculator, Split, Play, ShieldAlert } from 'lucide-react
 import { DatabaseApiClient } from '../../../services/databaseApi';
 import { TableDetailsResult } from '../../../types/database';
 import { CaseRule, GeneratedAnalysisQuery } from '../../../types/analysis';
-import { classifyColumns } from '../../../utils/analysisCompatibility';
+import { classifyColumns, SmartFieldMapper } from '../../../utils/analysisCompatibility';
 
 interface CalculationsBuilderProps {
   table: TableDetailsResult;
@@ -18,8 +18,8 @@ export const CalculationsBuilder: React.FC<CalculationsBuilderProps> = ({
 
   const { numericColumns } = classifyColumns(table.columns);
   const defaultCol = table.columns[0]?.name || '';
-  const defaultNum1 = numericColumns[0]?.name || defaultCol;
-  const defaultNum2 = numericColumns[1]?.name || numericColumns[0]?.name || defaultCol;
+  const defaultNum1 = SmartFieldMapper.suggestColumn(table.columns, 'monetary') || numericColumns[0]?.name || defaultCol;
+  const defaultNum2 = SmartFieldMapper.suggestColumn(table.columns, 'quantity') || numericColumns[1]?.name || numericColumns[0]?.name || defaultCol;
 
   // 1. CASE Builder State
   const [caseTargetCol, setCaseTargetCol] = useState<string>(defaultNum1);

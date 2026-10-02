@@ -13,7 +13,7 @@ import {
 import { TableDetailsResult } from '../../../types/database';
 import { GeneratedAnalysisQuery } from '../../../types/analysis';
 import { DatabaseApiClient } from '../../../services/databaseApi';
-import { classifyColumns } from '../../../utils/analysisCompatibility';
+import { classifyColumns, SmartFieldMapper } from '../../../utils/analysisCompatibility';
 
 interface DataQualityBuilderProps {
   table: TableDetailsResult;
@@ -34,7 +34,7 @@ export const DataQualityBuilder: React.FC<DataQualityBuilderProps> = ({
   const [targetColumn, setTargetColumn] = useState<string>(table.columns[0]?.name || '');
   const [duplicateCols, setDuplicateCols] = useState<string[]>([table.columns[0]?.name || '']);
   const [numericCol, setNumericCol] = useState<string>(
-    numericColumns[0]?.name || table.columns[0]?.name || ''
+    SmartFieldMapper.suggestColumn(table.columns, 'monetary') || numericColumns[0]?.name || table.columns[0]?.name || ''
   );
 
   const toggleDuplicateCol = (colName: string) => {

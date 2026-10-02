@@ -46,6 +46,7 @@ import { runAnalysisExcelExportWorkflowTests } from './testAnalysisExcelExportWo
 import { runAnalysisDateAnalysisDialectsTests } from './testAnalysisDateAnalysisDialects';
 import { runAnalysisRankingTopNPerGroupTests } from './testAnalysisRankingTopNPerGroup';
 import { runAnalysisStatisticalSummaryNumericTests } from './testAnalysisStatisticalSummaryNumeric';
+import { runAnalysisSmartFieldMappingTests } from './testAnalysisSmartFieldMapping';
 
 console.log('\n============================================================');
 console.log('DATAPILOT PHASE 8: AUTOMATED TEST SUITE & REGRESSION MATRIX');
@@ -104,7 +105,8 @@ export const suites: TestGroup[] = [
   { name: '41. ANALYSIS TOOLKIT EXCEL EXPORT WORKFLOW (MULTI-SHEET WORKBOOK)', runner: runAnalysisExcelExportWorkflowTests },
   { name: '42. ANALYSIS TOOLKIT DATE ANALYSIS (SQLITE & MULTI-DIALECT COMPATIBILITY)', runner: runAnalysisDateAnalysisDialectsTests },
   { name: '43. ANALYSIS TOOLKIT RANKING (TOP N PER GROUP & SQLITE COMPATIBILITY)', runner: runAnalysisRankingTopNPerGroupTests },
-  { name: '44. ANALYSIS TOOLKIT STATISTICAL SUMMARY (NUMERIC & SQLITE COMPATIBILITY)', runner: runAnalysisStatisticalSummaryNumericTests }
+  { name: '44. ANALYSIS TOOLKIT STATISTICAL SUMMARY (NUMERIC & SQLITE COMPATIBILITY)', runner: runAnalysisStatisticalSummaryNumericTests },
+  { name: '45. ANALYSIS TOOLKIT SMART SEMANTIC FIELD MAPPING & SCORING MATRIX', runner: runAnalysisSmartFieldMappingTests }
 ];
 
 async function runAll() {

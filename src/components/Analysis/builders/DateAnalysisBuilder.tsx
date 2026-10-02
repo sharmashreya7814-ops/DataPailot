@@ -3,7 +3,7 @@ import { Calendar, TrendingUp, ArrowUpRight, BarChart2, Play, AlertCircle } from
 import { DatabaseApiClient } from '../../../services/databaseApi';
 import { TableDetailsResult } from '../../../types/database';
 import { GeneratedAnalysisQuery } from '../../../types/analysis';
-import { classifyColumns, AnalysisCompatibility } from '../../../utils/analysisCompatibility';
+import { classifyColumns, AnalysisCompatibility, SmartFieldMapper } from '../../../utils/analysisCompatibility';
 
 interface DateAnalysisBuilderProps {
   table: TableDetailsResult;
@@ -17,13 +17,12 @@ export const DateAnalysisBuilder: React.FC<DateAnalysisBuilderProps> = ({
   const compatibility = AnalysisCompatibility.checkDateAnalysis(table.columns);
   const { dateColumns, numericColumns } = classifyColumns(table.columns);
 
-  const [dateColumn, setDateColumn] = useState<string>(
-    dateColumns[0]?.name || table.columns[0]?.name || ''
-  );
+  const suggestedDate = SmartFieldMapper.suggestColumn(table.columns, 'date') || dateColumns[0]?.name || table.columns[0]?.name || '';
+  const suggestedMeasure = SmartFieldMapper.suggestColumn(table.columns, 'monetary') || numericColumns[0]?.name || '*';
+
+  const [dateColumn, setDateColumn] = useState<string>(suggestedDate);
   const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'quarter' | 'year'>('month');
-  const [measureColumn, setMeasureColumn] = useState<string>(
-    numericColumns[0]?.name || '*'
-  );
+  const [measureColumn, setMeasureColumn] = useState<string>(suggestedMeasure);
   const [measureFunction, setMeasureFunction] = useState<'SUM' | 'COUNT' | 'AVG' | 'MIN' | 'MAX'>('SUM');
   const [mode, setMode] = useState<
     'trend' | 'mom' | 'yoy' | 'running_sum' | 'running_count' | 'rolling_avg'

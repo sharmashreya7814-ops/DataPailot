@@ -3,7 +3,7 @@ import { Users, DollarSign, Package, Play, AlertCircle, Sparkles, Check } from '
 import { DatabaseApiClient } from '../../../services/databaseApi';
 import { TableDetailsResult } from '../../../types/database';
 import { GeneratedAnalysisQuery, AnalysisCategory } from '../../../types/analysis';
-import { AnalysisCompatibility, classifyColumns } from '../../../utils/analysisCompatibility';
+import { AnalysisCompatibility, classifyColumns, SmartFieldMapper } from '../../../utils/analysisCompatibility';
 
 interface BusinessTemplatesBuilderProps {
   table: TableDetailsResult;
@@ -16,42 +16,42 @@ export const BusinessTemplatesBuilder: React.FC<BusinessTemplatesBuilderProps> =
   category,
   onPreviewQuery
 }) => {
-  const { numericColumns, dateColumns, stringColumns, idColumns } = classifyColumns(table.columns);
+  const { numericColumns, dateColumns, stringColumns } = classifyColumns(table.columns);
 
   // 1. Customer Analysis State
   const custCompat = AnalysisCompatibility.checkCustomerAnalysis(table.columns);
   const [custTemplate, setCustTemplate] = useState<'order_summary' | 'rfm' | 'repeat_customers' | 'aov' | 'ranking'>('order_summary');
   const [custCustomerId, setCustCustomerId] = useState<string>(
-    idColumns[0]?.name || table.columns.find(c => c.name.toLowerCase().includes('id'))?.name || table.columns[0]?.name || ''
+    custCompat.suggestions.customerId || SmartFieldMapper.suggestColumn(table.columns, 'customer') || table.columns[0]?.name || ''
   );
   const [custAmountCol, setCustAmountCol] = useState<string>(
-    numericColumns[0]?.name || ''
+    custCompat.suggestions.amountColumn || SmartFieldMapper.suggestColumn(table.columns, 'monetary') || numericColumns[0]?.name || ''
   );
   const [custDateCol, setCustDateCol] = useState<string>(
-    dateColumns[0]?.name || ''
+    custCompat.suggestions.dateColumn || SmartFieldMapper.suggestColumn(table.columns, 'date') || dateColumns[0]?.name || ''
   );
 
   // 2. Sales Analysis State
   const salesCompat = AnalysisCompatibility.checkSalesAnalysis(table.columns);
   const [salesTemplate, setSalesTemplate] = useState<'total_sales' | 'sales_by_month' | 'sales_by_dimension'>('total_sales');
   const [salesRevenueCol, setSalesRevenueCol] = useState<string>(
-    numericColumns[0]?.name || ''
+    salesCompat.suggestions.revenueColumn || SmartFieldMapper.suggestColumn(table.columns, 'monetary') || numericColumns[0]?.name || ''
   );
   const [salesDateCol, setSalesDateCol] = useState<string>(
-    dateColumns[0]?.name || ''
+    salesCompat.suggestions.dateColumn || SmartFieldMapper.suggestColumn(table.columns, 'date') || dateColumns[0]?.name || ''
   );
   const [salesDimCol, setSalesDimCol] = useState<string>(
-    stringColumns[0]?.name || ''
+    salesCompat.suggestions.categoryColumn || SmartFieldMapper.suggestColumn(table.columns, 'dimension') || stringColumns[0]?.name || ''
   );
 
   // 3. Product Analysis State
   const prodCompat = AnalysisCompatibility.checkProductAnalysis(table.columns);
   const [prodTemplate, setProdTemplate] = useState<'top_products' | 'product_ranking' | 'product_contribution'>('top_products');
   const [prodProductCol, setProdProductCol] = useState<string>(
-    stringColumns[0]?.name || table.columns[0]?.name || ''
+    prodCompat.suggestions.productColumn || SmartFieldMapper.suggestColumn(table.columns, 'product') || stringColumns[0]?.name || table.columns[0]?.name || ''
   );
   const [prodMeasureCol, setProdMeasureCol] = useState<string>(
-    numericColumns[0]?.name || ''
+    prodCompat.suggestions.measureColumn || SmartFieldMapper.suggestColumn(table.columns, 'monetary') || numericColumns[0]?.name || ''
   );
 
   // Handle Customer Preview

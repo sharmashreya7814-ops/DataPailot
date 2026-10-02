@@ -3,7 +3,7 @@ import { Award, Layers, Play, Plus, Trash2, ArrowUpDown } from 'lucide-react';
 import { DatabaseApiClient } from '../../../services/databaseApi';
 import { TableDetailsResult } from '../../../types/database';
 import { WindowFunctionConfig, TopNPerGroupConfig, GeneratedAnalysisQuery } from '../../../types/analysis';
-import { classifyColumns } from '../../../utils/analysisCompatibility';
+import { classifyColumns, SmartFieldMapper } from '../../../utils/analysisCompatibility';
 
 interface WindowFunctionsBuilderProps {
   table: TableDetailsResult;
@@ -17,8 +17,8 @@ export const WindowFunctionsBuilder: React.FC<WindowFunctionsBuilderProps> = ({
   const [activeTab, setActiveTab] = useState<'window' | 'top_per_group'>('top_per_group');
 
   const { numericColumns, stringColumns } = classifyColumns(table.columns);
-  const defaultGroup = stringColumns[0]?.name || table.columns[0]?.name || '';
-  const defaultNumeric = numericColumns[0]?.name || table.columns[0]?.name || '';
+  const defaultGroup = SmartFieldMapper.suggestColumn(table.columns, 'dimension') || stringColumns[0]?.name || table.columns[0]?.name || '';
+  const defaultNumeric = SmartFieldMapper.suggestColumn(table.columns, 'monetary') || numericColumns[0]?.name || table.columns[0]?.name || '';
 
   // Tab 1: Window Function Config
   const [winFunc, setWinFunc] = useState<WindowFunctionConfig['func']>('ROW_NUMBER');
