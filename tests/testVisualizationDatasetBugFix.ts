@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { ChartConfig, DetectedColumn } from '../src/types/visualization';
 import { ImportedDataset } from '../src/types/import';
 import { VisualizationQueryBuilder } from '../src/services/visualizationQueryBuilder';
@@ -171,6 +173,58 @@ export function runVisualizationDatasetBugFixTests() {
     '7. Y Axis independently exposes All Rows (*) and numeric measure columns (Sales, Profit, Quantity)',
     ecomCols.includes('Sales') && ecomCols.includes('Profit') && ecomCols.includes('Quantity'),
     'Y Axis must expose numeric columns and measure columns independently'
+  );
+
+  // 8. Visuals Empty State UI Tests
+  const visWorkspaceSource = fs.readFileSync(path.join(process.cwd(), 'src/components/Visualization/VisualizationWorkspace.tsx'), 'utf-8');
+  const illustrationSource = fs.readFileSync(path.join(process.cwd(), 'src/components/Visualization/VisualAnalyticsIllustration.tsx'), 'utf-8');
+
+  assertTest(
+    '8. Visuals empty state displays "No visualization yet" heading',
+    visWorkspaceSource.includes('No visualization yet'),
+    'Empty state must display "No visualization yet"'
+  );
+
+  assertTest(
+    '9. Visuals empty state displays descriptive copy for connecting data or importing dataset',
+    visWorkspaceSource.includes('Connect your data or import a dataset to turn your data into interactive visual insights.'),
+    'Empty state must include specified copy'
+  );
+
+  assertTest(
+    '10. Visuals empty state preserves Connect Database and Import Dataset action buttons',
+    visWorkspaceSource.includes('id="btn-vis-connect-db"') &&
+    visWorkspaceSource.includes('Connect Database') &&
+    visWorkspaceSource.includes('id="btn-vis-import-dataset"') &&
+    visWorkspaceSource.includes('Import Dataset'),
+    'Action buttons must be preserved'
+  );
+
+  assertTest(
+    '11. Visuals empty state includes capability hint "Create charts • Explore trends • Compare metrics"',
+    visWorkspaceSource.includes('Create charts') &&
+    visWorkspaceSource.includes('Explore trends') &&
+    visWorkspaceSource.includes('Compare metrics'),
+    'Capability hint must be rendered'
+  );
+
+  assertTest(
+    '12. Visuals empty state provides AI Assistant visualization recommendation hint and click handler',
+    visWorkspaceSource.includes('✦ Need help choosing a chart?') &&
+    visWorkspaceSource.includes('Ask AI Assistant to recommend a visualization.') &&
+    visWorkspaceSource.includes('id="btn-vis-empty-ai-assistant"') &&
+    visWorkspaceSource.includes('handleOpenAiAssistant'),
+    'AI Assistant hint must be present and clickable'
+  );
+
+  assertTest(
+    '13. VisualAnalyticsIllustration communicates bar chart, trend line, donut chart, and data points',
+    illustrationSource.includes('Visual Insights') &&
+    illustrationSource.includes('strokeDasharray') && // Donut segment
+    illustrationSource.includes('vis-trend-gradient') && // Trend line
+    illustrationSource.includes('<circle') && // Data points
+    illustrationSource.includes('bg-gradient-to-t'), // Bar charts
+    'Illustration must render visual analytics elements'
   );
 
   return results;

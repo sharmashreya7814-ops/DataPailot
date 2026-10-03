@@ -48,6 +48,7 @@ import { ChartConfigPanel } from './ChartConfigPanel';
 import { InsightsDrawer } from './InsightsDrawer';
 import { SavedVisualizationsModal } from './SavedVisualizationsModal';
 import { SaveVisualizationDialog } from './SaveVisualizationDialog';
+import { VisualAnalyticsIllustration } from './VisualAnalyticsIllustration';
 
 // Chart components
 import { KpiCardView } from './charts/KpiCardView';
@@ -82,6 +83,9 @@ export interface VisualizationWorkspaceProps {
   selectedTable?: TableDetailsResult | null;
   tables?: DiscoveredTable[];
   onSelectTable?: (table: DiscoveredTable) => void;
+
+  // AI Assistant support
+  onOpenAiAssistant?: () => void;
 }
 
 const LOCAL_STORAGE_SAVED_CHARTS_KEY = 'datapilot_saved_visualizations';
@@ -99,7 +103,8 @@ export const VisualizationWorkspace: React.FC<VisualizationWorkspaceProps> = ({
   onOpenImportModal,
   selectedTable = null,
   tables = [],
-  onSelectTable
+  onSelectTable,
+  onOpenAiAssistant
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
 
@@ -775,38 +780,88 @@ export const VisualizationWorkspace: React.FC<VisualizationWorkspaceProps> = ({
     setTimeout(() => setCopiedSql(false), 2000);
   };
 
+  const handleOpenAiAssistant = useCallback(() => {
+    if (onOpenAiAssistant) {
+      onOpenAiAssistant();
+    } else {
+      const btn = document.getElementById('btn-navbar-ai-assistant');
+      if (btn) btn.click();
+    }
+  }, [onOpenAiAssistant]);
+
   // Check if completely disconnected and without any data sources
   if (!hasImportedData && !hasDbConnection && !hasQueryResult) {
     return (
-      <div id="vis-empty-state" className="flex-1 flex flex-col items-center justify-center h-full bg-slate-950 p-6 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 mb-4">
-          <Layers className="w-7 h-7 text-indigo-400" />
-        </div>
-        <h2 className="text-lg font-semibold text-slate-200">No data source connected.</h2>
-        <p className="text-xs text-slate-400 max-w-md mt-1 mb-6">
-          Connect your PostgreSQL, MySQL, SQLite, or SQL Server database, or import a dataset to visualize data instantly.
-        </p>
-        <div className="flex items-center space-x-3">
-          {onOpenConnectModal && (
+      <div
+        id="vis-empty-state"
+        className="flex-1 flex flex-col items-center justify-center h-full bg-slate-950 p-6 text-center select-none"
+      >
+        <div className="max-w-md w-full flex flex-col items-center">
+          {/* 1. Visual Analytics Illustration */}
+          <VisualAnalyticsIllustration />
+
+          {/* 2. Heading */}
+          <h2 className="text-xl font-bold text-white tracking-tight">
+            No visualization yet
+          </h2>
+
+          {/* 3. Description */}
+          <p className="text-xs sm:text-sm text-slate-400 mt-2 mb-6 leading-relaxed max-w-sm">
+            Connect your data or import a dataset to turn your data into interactive visual insights.
+          </p>
+
+          {/* 4. Primary Actions */}
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            {onOpenConnectModal && (
+              <button
+                id="btn-vis-connect-db"
+                type="button"
+                onClick={onOpenConnectModal}
+                className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow-lg shadow-indigo-600/25 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+              >
+                <Database className="w-4 h-4" />
+                <span>Connect Database</span>
+              </button>
+            )}
+            {onOpenImportModal && (
+              <button
+                id="btn-vis-import-dataset"
+                type="button"
+                onClick={onOpenImportModal}
+                className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-lg shadow-emerald-600/25 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Import Dataset</span>
+              </button>
+            )}
+          </div>
+
+          {/* 5. Capability hint below buttons */}
+          <p className="text-xs text-slate-400 mt-5 font-medium tracking-wide flex items-center justify-center space-x-2">
+            <span>Create charts</span>
+            <span className="text-slate-600">•</span>
+            <span>Explore trends</span>
+            <span className="text-slate-600">•</span>
+            <span>Compare metrics</span>
+          </p>
+
+          {/* 6. Subtle AI Hint */}
+          <div className="mt-6 pt-5 border-t border-slate-800/80 w-full max-w-xs text-center">
             <button
-              id="btn-vis-connect-db"
-              onClick={onOpenConnectModal}
-              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow-lg shadow-indigo-600/20 transition-all cursor-pointer"
+              type="button"
+              id="btn-vis-empty-ai-assistant"
+              onClick={handleOpenAiAssistant}
+              className="inline-flex flex-col items-center group cursor-pointer text-slate-400 hover:text-slate-200 transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded-lg p-2"
+              title="Open AI Assistant to recommend a visualization"
             >
-              <Database className="w-4 h-4" />
-              <span>Connect Database</span>
+              <span className="text-[11px] font-medium text-indigo-400 group-hover:text-indigo-300 transition-colors flex items-center space-x-1 mb-0.5">
+                <span>✦ Need help choosing a chart?</span>
+              </span>
+              <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors underline decoration-slate-700 group-hover:decoration-indigo-400 underline-offset-4">
+                Ask AI Assistant to recommend a visualization.
+              </span>
             </button>
-          )}
-          {onOpenImportModal && (
-            <button
-              id="btn-vis-import-dataset"
-              onClick={onOpenImportModal}
-              className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Import Dataset</span>
-            </button>
-          )}
+          </div>
         </div>
       </div>
     );
