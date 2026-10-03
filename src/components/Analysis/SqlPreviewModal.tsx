@@ -12,11 +12,9 @@ import {
   Layers,
   LayoutDashboard,
   Loader2,
-  CheckCircle2,
   AlertTriangle
 } from 'lucide-react';
 import { GeneratedAnalysisQuery } from '../../types/analysis';
-import { QueryResult } from '../../types/database';
 import { DatabaseApiClient } from '../../services/databaseApi';
 
 interface SqlPreviewModalProps {
@@ -42,13 +40,11 @@ export const SqlPreviewModal: React.FC<SqlPreviewModalProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
-  const [executionResult, setExecutionResult] = useState<QueryResult | null>(null);
   const [executionError, setExecutionError] = useState<string | null>(null);
 
-  // Reset execution result & error when query changes or modal opens
+  // Reset execution error & execution state when query changes or modal opens
   useEffect(() => {
     if (isOpen) {
-      setExecutionResult(null);
       setExecutionError(null);
       setIsExecuting(false);
       setCopied(false);
@@ -90,28 +86,24 @@ export const SqlPreviewModal: React.FC<SqlPreviewModalProps> = ({
   };
 
   const handleExecute = async () => {
+    // Prevent double-click while executing or running
     if (isExecuting || isRunning) return;
     setIsExecuting(true);
     setExecutionError(null);
-    setExecutionResult(null);
 
     try {
+      let res: any;
       if (onRunQuery) {
-        const res = await onRunQuery(query.sql, query);
-        if (res) {
-          if (res.status === 'error' || res.errorMessage) {
-            setExecutionError(res.errorMessage || 'Query execution failed against the connected database.');
-          } else {
-            setExecutionResult(res as QueryResult);
-          }
-        }
+        res = await onRunQuery(query.sql, query);
       } else {
-        const res = await DatabaseApiClient.executeQuery(query.sql);
-        if (res.status === 'error' || res.errorMessage) {
-          setExecutionError(res.errorMessage || 'Query execution failed against the connected database.');
-        } else {
-          setExecutionResult(res as QueryResult);
-        }
+        res = await DatabaseApiClient.executeQuery(query.sql);
+      }
+
+      if (res && (res.status === 'error' || res.errorMessage || (typeof res.success === 'boolean' && !res.success))) {
+        setExecutionError(res.errorMessage || 'Query execution failed against the connected database.');
+      } else {
+        // On success: automatically close modal and return user to Analysis Toolkit
+        onClose();
       }
     } catch (err: any) {
       console.error('SQL Preview Modal execution error:', err);
@@ -277,69 +269,23 @@ export const SqlPreviewModal: React.FC<SqlPreviewModalProps> = ({
 
           {/* Execution Error Banner (if error occurred) */}
           {executionError && (
-            <div className="p-2.5 rounded-lg bg-rose-950/30 border border-rose-800/60 text-xs text-rose-300 flex items-start space-x-2">
+            <div
+              id="analysis-execution-error-banner"
+              className="p-3 rounded-lg bg-rose-950/40 border border-rose-800/60 text-xs text-rose-300 flex items-start space-x-2.5 animate-in fade-in duration-150"
+            >
               <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
-              <div className="space-y-0.5 flex-1">
-                <span className="font-semibold text-rose-200 block">Execution Error</span>
-                <span className="leading-relaxed">{executionError}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Compact Execution Results (if executed) */}
-          {executionResult && (
-            <div className="space-y-1.5 pt-1">
-              <div className="flex items-center justify-between p-2 rounded-lg bg-slate-950/60 border border-slate-800 text-xs">
-                <div className="flex items-center space-x-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="font-semibold text-slate-200">Execution Results</span>
+              <div className="space-y-1 flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-rose-200">Execution Error</span>
+                  <button
+                    type="button"
+                    onClick={() => setExecutionError(null)}
+                    className="text-slate-400 hover:text-slate-200 text-[11px]"
+                  >
+                    Dismiss
+                  </button>
                 </div>
-                <div className="flex items-center space-x-2 font-mono text-[10px]">
-                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-medium">
-                    {executionResult.rowCount} rows returned
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-                    Execution time: {executionResult.executionTimeMs} ms
-                  </span>
-                </div>
-              </div>
-
-              <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950 max-h-32 overflow-auto analysis-scroll-dark">
-                {executionResult.rows.length === 0 ? (
-                  <div className="p-3 text-center text-xs text-slate-400">
-                    Query executed successfully (0 rows returned).
-                  </div>
-                ) : (
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
-                      <tr>
-                        {executionResult.columns.map((col, idx) => (
-                          <th
-                            key={idx}
-                            className="px-2.5 py-1.5 font-mono font-medium text-slate-300 text-[10px] whitespace-nowrap bg-slate-900"
-                          >
-                            {col.name}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60 font-mono text-[10px]">
-                      {executionResult.rows.map((row, rIdx) => (
-                        <tr key={rIdx} className="hover:bg-slate-850/50">
-                          {executionResult.columns.map((col, cIdx) => (
-                            <td key={cIdx} className="px-2.5 py-1 text-slate-300 whitespace-nowrap">
-                              {row[col.name] === null || row[col.name] === undefined
-                                ? 'NULL'
-                                : typeof row[col.name] === 'object'
-                                ? JSON.stringify(row[col.name])
-                                : String(row[col.name])}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                <p className="leading-relaxed text-rose-300/90">{executionError}</p>
               </div>
             </div>
           )}
@@ -388,19 +334,19 @@ export const SqlPreviewModal: React.FC<SqlPreviewModalProps> = ({
               id="btn-execute-analysis-query"
               onClick={handleExecute}
               disabled={isWorking}
-              aria-label="Execute & Preview Results"
-              title="Execute / Preview Results"
+              aria-label="Execute"
+              title="Execute"
               className="flex items-center space-x-1.5 px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg transition-colors shadow-lg shadow-emerald-950/40"
             >
               {isWorking ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Executing Query...</span>
+                  <span>Executing...</span>
                 </>
               ) : (
                 <>
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Execute / Preview Results</span>
+                  <span>Execute</span>
                 </>
               )}
             </button>

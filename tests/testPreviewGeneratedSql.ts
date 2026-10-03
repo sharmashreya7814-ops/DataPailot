@@ -249,8 +249,10 @@ export async function runPreviewGeneratedSqlTests(): Promise<TestResult[]> {
   );
 
   record(
-    '24. SqlPreviewModal provides Execute / Preview Results action',
-    sqlPreviewSource.includes('id="btn-execute-analysis-query"') && sqlPreviewSource.includes('Execute / Preview Results')
+    '24. SqlPreviewModal provides primary Execute action',
+    sqlPreviewSource.includes('id="btn-execute-analysis-query"') &&
+    sqlPreviewSource.includes('<span>Execute</span>') &&
+    !sqlPreviewSource.includes('Execute / Preview Results')
   );
 
   record(
@@ -299,18 +301,18 @@ export async function runPreviewGeneratedSqlTests(): Promise<TestResult[]> {
   );
 
   record(
-    '32. SqlPreviewModal shows loading state "Executing Query..." with spinner on execution',
-    sqlPreviewSource.includes('Executing Query...') &&
+    '32. SqlPreviewModal shows loading state "Executing..." with spinner on execution',
+    sqlPreviewSource.includes('Executing...') &&
     sqlPreviewSource.includes('Loader2') &&
     sqlPreviewSource.includes('disabled={isWorking}')
   );
 
   record(
-    '33. SqlPreviewModal renders scrollable table preview on successful execution',
-    sqlPreviewSource.includes('executionResult') &&
-    sqlPreviewSource.includes('rows returned') &&
-    sqlPreviewSource.includes('Execution time:') &&
-    sqlPreviewSource.includes('<table')
+    '33. SqlPreviewModal automatically closes on success and does not render results or preview table',
+    !sqlPreviewSource.includes('rows returned') &&
+    !sqlPreviewSource.includes('Execution time:') &&
+    !sqlPreviewSource.includes('<table') &&
+    sqlPreviewSource.includes('onClose()')
   );
 
   record(
