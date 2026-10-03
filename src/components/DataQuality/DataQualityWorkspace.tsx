@@ -8,6 +8,7 @@ import { DatabaseApiClient } from '../../services/databaseApi';
 import { DiscoveredTable, SanitizedConnectionInfo, TableDetailsResult } from '../../types/database';
 import { DataProfile, QualityIssue, ImportedDataset } from '../../types/import';
 import { ExcelExportService } from '../../services/excelExportService';
+import { DataQualityEmptyStateIllustration } from './DataQualityEmptyStateIllustration';
 
 interface DataQualityWorkspaceProps {
   selectedTable: TableDetailsResult | null;
@@ -327,9 +328,16 @@ export const DataQualityWorkspace: React.FC<DataQualityWorkspaceProps> = ({
 
     if (!profile) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-slate-500">
-          <ShieldAlert className="w-12 h-12 mb-4 opacity-50" />
-          <p>Select a table or imported dataset from the sidebar to view its Data Quality profile.</p>
+        <div id="data-quality-empty-state" className="flex flex-col items-center justify-center h-full p-8 text-center select-none">
+          <div className="max-w-lg w-full flex flex-col items-center">
+            <DataQualityEmptyStateIllustration className="w-full max-w-sm sm:max-w-md h-auto mb-6" />
+            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight mb-2">
+              No Data Source Selected
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-400 max-w-md leading-relaxed">
+              Select a table or imported dataset from the sidebar to inspect its Data Quality profile.
+            </p>
+          </div>
         </div>
       );
     }
