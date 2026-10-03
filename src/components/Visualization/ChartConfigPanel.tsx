@@ -205,7 +205,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
       <div className="p-4 space-y-5">
         {/* 1. Core Chart Types */}
         <div>
-          <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
             Core Visualizations
           </label>
           <div className="grid grid-cols-2 gap-1.5">
@@ -220,10 +220,10 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                   id={`chart-type-${ct.type}`}
                   onClick={() => handleTypeSelect(ct.type)}
                   title={isRecommended ? `Recommended: ${recReason}` : undefined}
-                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-left transition-all relative ${
+                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-left transition-all relative cursor-pointer ${
                     isSelected
-                      ? 'bg-indigo-600/20 border-indigo-500 text-white font-medium shadow-sm'
-                      : 'bg-slate-850/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                      ? 'bg-indigo-600/20 border-indigo-500 text-white font-medium shadow-xs'
+                      : 'bg-slate-850/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800 hover:border-slate-700'
                   }`}
                 >
                   <div className="flex items-center space-x-1.5 min-w-0">
@@ -240,8 +240,8 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
         </div>
 
         {/* 2. Analytical Chart Types */}
-        <div>
-          <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+        <div className="pt-2 border-t border-slate-800/80">
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
             Analytical & Specialized
           </label>
           <div className="grid grid-cols-2 gap-1.5">
@@ -256,10 +256,10 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                   id={`chart-type-${ct.type}`}
                   onClick={() => handleTypeSelect(ct.type)}
                   title={isRecommended ? `Recommended: ${recReason}` : undefined}
-                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-left transition-all ${
+                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-left transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-indigo-600/20 border-indigo-500 text-white font-medium shadow-sm'
-                      : 'bg-slate-850/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                      ? 'bg-indigo-600/20 border-indigo-500 text-white font-medium shadow-xs'
+                      : 'bg-slate-850/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800 hover:border-slate-700'
                   }`}
                 >
                   <div className="flex items-center space-x-1.5 min-w-0">
@@ -278,9 +278,9 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
         {config.chartType !== 'table' && (
           <>
             {/* 3. Dimensions & Measures Axis Mapping */}
-            <div className="space-y-3 pt-2 border-t border-slate-800/80">
+            <div className="space-y-3 pt-3 border-t border-slate-800/80">
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   Field Mappings
                 </label>
                 <Sliders className="w-3.5 h-3.5 text-slate-400" />
@@ -302,7 +302,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                     id="select-chart-x-axis"
                     value={config.xAxis}
                     onChange={e => onChangeConfig({ ...config, xAxis: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-hidden focus:border-indigo-500 hover:border-slate-700 transition-colors cursor-pointer"
                   >
                     <option value="">— Select Column —</option>
                     {columns.map(col => (
@@ -332,7 +332,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                     id="select-chart-y-axis"
                     value={config.yAxis}
                     onChange={e => onChangeConfig({ ...config, yAxis: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-hidden focus:border-indigo-500 hover:border-slate-700 transition-colors cursor-pointer"
                   >
                     <option value="">— Select Measure or Count —</option>
                     <option value="All Rows">All Rows (*)</option>
@@ -367,10 +367,10 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                         type="button"
                         id={`btn-agg-${agg.id}`}
                         onClick={() => handleAggregationChange(agg.id as ChartAggregation)}
-                        className={`py-1 rounded text-center text-[10px] font-mono border transition-all ${
+                        className={`py-1 rounded text-center text-[10px] font-mono border transition-all cursor-pointer ${
                           config.aggregation === agg.id
-                            ? 'bg-indigo-600 border-indigo-500 text-white font-semibold'
-                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                            ? 'bg-indigo-600 border-indigo-500 text-white font-semibold shadow-xs'
+                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
                         }`}
                       >
                         {agg.label}
@@ -400,9 +400,9 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                               type="checkbox"
                               checked={isChecked}
                               onChange={() => handleSecondaryMeasureToggle(col.name)}
-                              className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0"
+                              className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-1 focus:ring-indigo-500/40 focus:ring-offset-0 focus:outline-hidden cursor-pointer accent-indigo-600"
                             />
-                            <span className="truncate">{col.name}</span>
+                            <span className="truncate text-xs">{col.name}</span>
                           </label>
                         );
                       })}
@@ -419,7 +419,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                   <select
                     value={config.seriesGroup || ''}
                     onChange={e => onChangeConfig({ ...config, seriesGroup: e.target.value || undefined })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-hidden focus:border-indigo-500 hover:border-slate-700 transition-colors cursor-pointer"
                   >
                     <option value="">(None - Single Color)</option>
                     {categoricalColumns.map(col => (
@@ -440,10 +440,10 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                       <button
                         key={b}
                         onClick={() => onChangeConfig({ ...config, binCount: b })}
-                        className={`py-1 rounded text-center font-mono border transition-all ${
+                        className={`py-1 rounded text-center font-mono border transition-all cursor-pointer ${
                           config.binCount === b
-                            ? 'bg-indigo-600 border-indigo-500 text-white font-semibold'
-                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                            ? 'bg-indigo-600 border-indigo-500 text-white font-semibold shadow-xs'
+                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
                         }`}
                       >
                         {b}
@@ -455,8 +455,8 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
             </div>
 
             {/* 4. Sorting & Limiting */}
-            <div className="space-y-3 pt-2 border-t border-slate-800/80">
-              <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="space-y-3 pt-3 border-t border-slate-800/80">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Sorting & Row Limits
               </label>
 
@@ -466,7 +466,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                   <select
                     value={config.sortOrder}
                     onChange={e => onChangeConfig({ ...config, sortOrder: e.target.value as SortOrder })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1.5 text-slate-200 focus:outline-none"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-hidden focus:border-indigo-500 hover:border-slate-700 transition-colors cursor-pointer"
                   >
                     <option value="none">Default (None)</option>
                     <option value="desc">Descending</option>
@@ -484,7 +484,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                         limit: e.target.value === 'all' ? 'all' : (parseInt(e.target.value, 10) as ChartLimit)
                       })
                     }
-                    className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1.5 text-slate-200 focus:outline-none"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-hidden focus:border-indigo-500 hover:border-slate-700 transition-colors cursor-pointer"
                   >
                     <option value="all">All Returned</option>
                     <option value="5">Top 5</option>
@@ -499,8 +499,8 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
 
             {/* 5. Axis Titles (Phase 4) */}
             {config.chartType !== 'kpi' && config.chartType !== 'pie' && config.chartType !== 'donut' && config.chartType !== 'treemap' && (
-              <div className="space-y-2 pt-2 border-t border-slate-800/80">
-                <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              <div className="space-y-2 pt-3 border-t border-slate-800/80">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   Axis Titles
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -511,7 +511,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                       value={config.xAxisLabel || ''}
                       onChange={e => onChangeConfig({ ...config, xAxisLabel: e.target.value })}
                       placeholder="e.g. Month"
-                      className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-hidden focus:border-indigo-500 hover:border-slate-700 transition-colors"
                     />
                   </div>
                   <div>
@@ -521,7 +521,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                       value={config.yAxisLabel || ''}
                       onChange={e => onChangeConfig({ ...config, yAxisLabel: e.target.value })}
                       placeholder="e.g. Revenue ($)"
-                      className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-hidden focus:border-indigo-500 hover:border-slate-700 transition-colors"
                     />
                   </div>
                 </div>
@@ -529,8 +529,8 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
             )}
 
             {/* 6. Number & Measure Formatting (Phase 4) */}
-            <div className="space-y-2 pt-2 border-t border-slate-800/80">
-              <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="space-y-2 pt-3 border-t border-slate-800/80">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Number & Metric Formatting
               </label>
 
@@ -540,7 +540,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                   <select
                     value={config.numberFormat || 'standard'}
                     onChange={e => onChangeConfig({ ...config, numberFormat: e.target.value as any })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-hidden focus:border-indigo-500 hover:border-slate-700 transition-colors cursor-pointer"
                   >
                     <option value="standard">Standard (1,234.56)</option>
                     <option value="compact">Compact (1.2k / 1.2M)</option>
@@ -554,7 +554,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                   <select
                     value={config.decimalPrecision !== undefined ? config.decimalPrecision : 2}
                     onChange={e => onChangeConfig({ ...config, decimalPrecision: parseInt(e.target.value, 10) })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-hidden focus:border-indigo-500 hover:border-slate-700 transition-colors cursor-pointer"
                   >
                     <option value={0}>0 decimals (12)</option>
                     <option value={1}>1 decimal (12.3)</option>
@@ -571,15 +571,15 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                     type="text"
                     value={config.currencySymbol || '$'}
                     onChange={e => onChangeConfig({ ...config, currencySymbol: e.target.value })}
-                    className="w-20 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                    className="w-20 bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-hidden focus:border-indigo-500 hover:border-slate-700 transition-colors"
                   />
                 </div>
               )}
             </div>
 
             {/* 7. Display & Toggles */}
-            <div className="space-y-3 pt-2 border-t border-slate-800/80">
-              <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <div className="space-y-3 pt-3 border-t border-slate-800/80">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Labels & Display
               </label>
 
@@ -590,7 +590,7 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                   value={config.title}
                   onChange={e => onChangeConfig({ ...config, title: e.target.value })}
                   placeholder="e.g., Revenue by Month"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-hidden focus:border-indigo-500 hover:border-slate-700 transition-colors"
                 />
               </div>
 
@@ -601,60 +601,60 @@ export const ChartConfigPanel: React.FC<ChartConfigPanelProps> = ({
                   value={config.subtitle || ''}
                   onChange={e => onChangeConfig({ ...config, subtitle: e.target.value })}
                   placeholder="e.g., Q1 - Q4 Analysis"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-md px-2.5 py-1.5 text-slate-200 text-xs focus:outline-hidden focus:border-indigo-500 hover:border-slate-700 transition-colors"
                 />
               </div>
 
               {/* Toggles */}
               <div className="grid grid-cols-2 gap-2 pt-1">
-                <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                <label className="flex items-center space-x-2 text-slate-300 hover:text-white cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={config.showLegend}
                     onChange={e => onChangeConfig({ ...config, showLegend: e.target.checked })}
-                    className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0"
+                    className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-1 focus:ring-indigo-500/40 focus:ring-offset-0 focus:outline-hidden cursor-pointer accent-indigo-600"
                   />
                   <span>Legend</span>
                 </label>
 
-                <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                <label className="flex items-center space-x-2 text-slate-300 hover:text-white cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={config.showDataLabels}
                     onChange={e => onChangeConfig({ ...config, showDataLabels: e.target.checked })}
-                    className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0"
+                    className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-1 focus:ring-indigo-500/40 focus:ring-offset-0 focus:outline-hidden cursor-pointer accent-indigo-600"
                   />
                   <span>Data Labels</span>
                 </label>
 
-                <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                <label className="flex items-center space-x-2 text-slate-300 hover:text-white cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={config.showGrid}
                     onChange={e => onChangeConfig({ ...config, showGrid: e.target.checked })}
-                    className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0"
+                    className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-1 focus:ring-indigo-500/40 focus:ring-offset-0 focus:outline-hidden cursor-pointer accent-indigo-600"
                   />
                   <span>Grid Lines</span>
                 </label>
 
-                <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                <label className="flex items-center space-x-2 text-slate-300 hover:text-white cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={config.showTooltip !== false}
                     onChange={e => onChangeConfig({ ...config, showTooltip: e.target.checked })}
-                    className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0"
+                    className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-1 focus:ring-indigo-500/40 focus:ring-offset-0 focus:outline-hidden cursor-pointer accent-indigo-600"
                   />
                   <span>Tooltips</span>
                 </label>
               </div>
 
               {/* Safe NULL Handling Toggle */}
-              <label className="flex items-center space-x-2 text-slate-400 hover:text-slate-300 cursor-pointer pt-1 border-t border-slate-800/40">
+              <label className="flex items-center space-x-2 text-slate-400 hover:text-slate-300 cursor-pointer pt-2 border-t border-slate-800/40 select-none">
                 <input
                   type="checkbox"
                   checked={config.treatNullAsZero}
                   onChange={e => onChangeConfig({ ...config, treatNullAsZero: e.target.checked })}
-                  className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0"
+                  className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-1 focus:ring-indigo-500/40 focus:ring-offset-0 focus:outline-hidden cursor-pointer accent-indigo-600"
                 />
                 <span>Treat NULL values as 0</span>
               </label>

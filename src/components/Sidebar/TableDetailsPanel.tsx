@@ -110,7 +110,7 @@ export const TableDetailsPanel: React.FC<TableDetailsPanelProps> = ({
                       ) : (
                         <span className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0" />
                       )}
-                      <span className="text-xs text-slate-200 font-mono truncate group-hover:text-emerald-300">
+                      <span className="text-xs text-slate-200 font-mono truncate group-hover:text-emerald-300" title={col.name}>
                         {col.name}
                       </span>
                       {col.isPrimaryKey && (

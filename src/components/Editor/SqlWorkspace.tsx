@@ -259,8 +259,8 @@ export const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({
         aria-valuemax={85}
         aria-label="Resize Editor and Query Results"
         onKeyDown={handleSplitterKeyDown}
-        className={`h-2.5 bg-slate-900 border-y border-slate-800 flex items-center justify-between px-3 cursor-row-resize hover:bg-slate-800 transition-colors z-20 select-none flex-shrink-0 group ${
-          isDragging ? 'bg-indigo-600/40 border-indigo-500/50' : ''
+        className={`h-3 bg-slate-900/90 border-y border-slate-800/90 flex items-center justify-between px-3 cursor-row-resize hover:bg-slate-850 hover:border-slate-700/80 transition-all z-20 select-none flex-shrink-0 group ${
+          isDragging ? 'bg-indigo-950/80 border-indigo-500/60 shadow-xs' : ''
         }`}
         onMouseDown={e => {
           e.preventDefault();
@@ -269,15 +269,15 @@ export const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({
         onTouchStart={() => setIsDragging(true)}
       >
         {/* Left: Quick Splitter Layout Toggle */}
-        <div className="flex items-center space-x-1 opacity-60 group-hover:opacity-100 transition-opacity">
-          <span className="text-[10px] font-mono text-slate-400">
+        <div className="flex items-center space-x-1 opacity-70 group-hover:opacity-100 transition-opacity">
+          <span className="text-[10px] font-mono text-slate-400 group-hover:text-slate-300">
             {splitRatio}% Editor / {100 - splitRatio}% Results
           </span>
         </div>
 
-        {/* Center: Grip Drag Handle */}
-        <div className="flex items-center space-x-1 text-slate-500 group-hover:text-slate-300 transition-colors">
-          <GripHorizontal className="w-4 h-3 stroke-[2]" />
+        {/* Center: Enhanced Grip Drag Handle */}
+        <div className="flex items-center space-x-1.5 px-3 py-0.5 rounded-full bg-slate-800/40 group-hover:bg-slate-800 text-slate-400 group-hover:text-slate-200 transition-all border border-transparent group-hover:border-slate-700/60">
+          <GripHorizontal className="w-4 h-3.5 stroke-[2]" />
         </div>
 
         {/* Right: Quick Action Controls */}
@@ -285,7 +285,7 @@ export const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({
           <button
             type="button"
             onClick={isResultsCollapsed ? handleResetLayout : handleCollapseResults}
-            className="p-0.5 text-slate-500 hover:text-slate-200 rounded hover:bg-slate-750 transition-colors"
+            className="p-0.5 text-slate-400 hover:text-slate-200 rounded hover:bg-slate-800 transition-colors"
             title={isResultsCollapsed ? 'Restore Results Panel' : 'Collapse Results Panel (Maximize Editor)'}
             aria-label="Toggle Results Panel"
           >
@@ -294,7 +294,7 @@ export const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({
           <button
             type="button"
             onClick={handleExpandResults}
-            className="p-0.5 text-slate-500 hover:text-slate-200 rounded hover:bg-slate-750 transition-colors hidden sm:inline-block"
+            className="p-0.5 text-slate-400 hover:text-slate-200 rounded hover:bg-slate-800 transition-colors hidden sm:inline-block"
             title="Expand Results (Maximize Results Grid)"
             aria-label="Expand Results"
           >
@@ -303,7 +303,7 @@ export const SqlWorkspace: React.FC<SqlWorkspaceProps> = ({
           <button
             type="button"
             onClick={handleResetLayout}
-            className="p-0.5 text-slate-500 hover:text-slate-200 rounded hover:bg-slate-750 transition-colors"
+            className="p-0.5 text-slate-400 hover:text-slate-200 rounded hover:bg-slate-800 transition-colors"
             title="Reset Default Split Layout (58% / 42%)"
             aria-label="Reset Layout"
           >

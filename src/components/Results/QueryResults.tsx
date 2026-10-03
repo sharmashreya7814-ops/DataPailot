@@ -490,15 +490,23 @@ export const QueryResults: React.FC<QueryResultsProps> = ({
         {!isRunning && (!result || result.status === 'idle') && (
           <div
             id="empty-results-state"
-            className="h-full flex flex-col items-center justify-center p-6 text-center text-slate-500"
+            className="h-full flex flex-col items-center justify-center p-6 text-center select-none"
           >
-            <div className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-400 mb-2 shadow-inner">
-              <Terminal className="w-5 h-5 stroke-[1.5]" />
+            <div className="max-w-md w-full p-6 rounded-xl bg-slate-900/40 border border-slate-800/80 flex flex-col items-center text-center shadow-xs">
+              <div className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-emerald-400 mb-3 shadow-inner">
+                <Terminal className="w-5 h-5 stroke-[1.75]" />
+              </div>
+              <h4 className="text-xs font-semibold text-slate-200 mb-1 tracking-tight">No query executed yet</h4>
+              <p className="text-[11px] text-slate-400 max-w-xs leading-relaxed mb-3">
+                Write a read-only SQL query and run it to view results.
+              </p>
+              <div className="flex items-center space-x-2 text-[10px] font-mono text-slate-400 bg-slate-950/80 px-2.5 py-1 rounded-md border border-slate-800">
+                <span className="text-slate-400">Shortcut:</span>
+                <kbd className="px-1.5 py-0.5 bg-slate-800 text-slate-200 rounded border border-slate-700 text-[10px]">Ctrl</kbd>
+                <span>+</span>
+                <kbd className="px-1.5 py-0.5 bg-slate-800 text-slate-200 rounded border border-slate-700 text-[10px]">Enter</kbd>
+              </div>
             </div>
-            <h4 className="text-xs font-semibold text-slate-300 mb-1">No query executed yet</h4>
-            <p className="text-[11px] text-slate-400 max-w-sm leading-relaxed">
-              Write a read-only SQL query and run it to view results.
-            </p>
           </div>
         )}
 

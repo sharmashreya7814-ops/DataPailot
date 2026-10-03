@@ -386,8 +386,8 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
                       <div className="flex items-center space-x-2 truncate">
                         {getFileTypeIcon(ds.fileType)}
                         <div className="truncate">
-                          <div className="truncate font-medium text-xs text-slate-200">{ds.name}</div>
-                          <div className="text-[10px] text-slate-500 font-mono truncate">
+                          <div className="truncate font-medium text-xs text-slate-200" title={ds.name}>{ds.name}</div>
+                          <div className="text-[10px] text-slate-500 font-mono truncate" title={`${ds.tableName} • ${ds.rowCount.toLocaleString()} rows`}>
                             {ds.tableName} • {ds.rowCount.toLocaleString()} rows
                           </div>
                         </div>
@@ -501,9 +501,9 @@ export const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({
                           <span title="Table" className="flex items-center"><TableIcon className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" /></span>
                         )}
                         <div className="truncate flex flex-col min-w-0">
-                          <span className="truncate font-mono text-xs text-slate-200">{table.name}</span>
+                          <span className="truncate font-mono text-xs text-slate-200" title={table.name}>{table.name}</span>
                           {isShowingAllSchemas && (
-                            <span className="text-[10px] font-mono text-slate-500 truncate">
+                            <span className="text-[10px] font-mono text-slate-500 truncate" title={table.schema}>
                               {table.schema}
                             </span>
                           )}
