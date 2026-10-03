@@ -1207,6 +1207,7 @@ SELECT table_name, table_type FROM information_schema.tables WHERE table_schema 
                 tables={tables}
                 relationships={relationships}
                 tableDetailsCache={tableDetailsCache}
+                selectedSchema={selectedSchema}
                 onSelectTable={handleSelectTable}
                 onLoadTableDetails={async (schema, name) => {
                   try {

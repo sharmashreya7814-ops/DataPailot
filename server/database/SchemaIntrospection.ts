@@ -26,12 +26,28 @@ export class SchemaIntrospection {
     `;
 
     const res = await client.query(query, [schema || null]);
-    return res.rows.map(row => ({
+    const discovered = res.rows.map(row => ({
       schema: row.schema,
       name: row.name,
       type: row.type,
       approximateRowCount: row.approximate_row_count >= 0 ? Number(row.approximate_row_count) : 0
     }));
+
+    // If a table has 0 approximate rows (common before vacuum/analyze or in new test tables), attempt a quick COUNT query
+    for (const t of discovered) {
+      if (t.approximateRowCount === 0 && t.type === 'BASE TABLE') {
+        try {
+          const countRes = await client.query(`SELECT COUNT(*) AS c FROM "${t.schema.replace(/"/g, '""')}"."${t.name.replace(/"/g, '""')}"`);
+          if (countRes.rows[0]?.c !== undefined) {
+            t.approximateRowCount = Number(countRes.rows[0].c);
+          }
+        } catch {
+          // Keep default 0 on error
+        }
+      }
+    }
+
+    return discovered;
   }
 
   /**
@@ -180,14 +196,26 @@ export class SchemaIntrospection {
     }));
 
     const tableType = metaRes.rows[0]?.table_type || 'BASE TABLE';
-    const approxRows = metaRes.rows[0]?.approximate_row_count;
+    let approxRows = metaRes.rows[0]?.approximate_row_count;
+    let finalRowCount = approxRows !== undefined && approxRows >= 0 ? Number(approxRows) : 0;
+
+    if (tableType === 'BASE TABLE' && (!approxRows || Number(approxRows) <= 0)) {
+      try {
+        const countRes = await client.query(`SELECT COUNT(*) AS c FROM "${schema.replace(/"/g, '""')}"."${tableName.replace(/"/g, '""')}"`);
+        if (countRes.rows[0]?.c !== undefined) {
+          finalRowCount = Number(countRes.rows[0].c);
+        }
+      } catch {
+        // ignore fallback
+      }
+    }
 
     return {
       schema,
       name: tableName,
       type: tableType,
       columnCount: columns.length,
-      approximateRowCount: approxRows !== undefined && approxRows >= 0 ? Number(approxRows) : undefined,
+      approximateRowCount: finalRowCount,
       columns,
       outgoingRelationships,
       incomingRelationships

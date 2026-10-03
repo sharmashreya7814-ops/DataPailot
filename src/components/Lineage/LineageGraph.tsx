@@ -14,12 +14,12 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { DiscoveredTable, DatabaseRelationship } from '../../types/database';
-import { Database, Layers, Key, Hash } from 'lucide-react';
+import { Database, Layers } from 'lucide-react';
 
 const TableNode = ({ data, selected }: any) => {
   return (
     <div
-      className={`rounded-xl border transition-all duration-200 min-w-[200px] shadow-xl overflow-hidden ${
+      className={`rounded-xl border transition-all duration-200 min-w-[210px] shadow-xl overflow-hidden ${
         selected
           ? 'bg-slate-900 border-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.3)] ring-1 ring-cyan-500/60'
           : 'bg-slate-900/95 border-slate-700/80 hover:border-slate-500 hover:shadow-2xl'
@@ -35,22 +35,25 @@ const TableNode = ({ data, selected }: any) => {
       >
         <div className="flex items-center space-x-2 truncate min-w-0">
           <Database className={`w-3.5 h-3.5 flex-shrink-0 ${selected ? 'text-cyan-400' : 'text-indigo-400'}`} />
-          <div className="text-xs font-bold truncate tracking-tight">{data.label}</div>
+          <div className="text-xs font-bold truncate tracking-tight font-mono">{data.label}</div>
         </div>
-        {data.schema && data.schema !== 'public' && data.schema !== 'imported' && (
-          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-900 text-slate-400 border border-slate-700 flex-shrink-0 ml-1">
-            {data.schema}
-          </span>
-        )}
       </div>
 
-      {/* Node Body */}
-      <div className="p-2.5 flex items-center justify-between text-[11px] text-slate-400 font-mono bg-slate-950/70">
-        <div className="flex items-center space-x-1.5">
-          <Layers className="w-3 h-3 text-slate-500" />
-          <span>{data.rowCount !== undefined ? `${data.rowCount.toLocaleString()} rows` : 'Table'}</span>
+      {/* Node Body with Clearly Visible Schema & Accurate Row Count */}
+      <div className="p-2.5 space-y-1.5 text-xs bg-slate-950/80">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Schema</span>
+          <span className="text-[11px] font-mono px-1.5 py-0.2 rounded bg-slate-900 text-cyan-300 border border-slate-800 font-semibold truncate max-w-[130px]">
+            {data.schema || 'public'}
+          </span>
         </div>
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-800/60">
+          <div className="flex items-center space-x-1.5">
+            <Layers className="w-3 h-3 text-slate-500" />
+            <span className="text-slate-200 font-medium">
+              {data.rowCount !== undefined ? `${Number(data.rowCount).toLocaleString()} rows` : '0 rows'}
+            </span>
+          </div>
           <span className={`w-2 h-2 rounded-full ${selected ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400/80'}`} />
         </div>
       </div>
@@ -91,7 +94,7 @@ export const LineageGraph: React.FC<LineageGraphProps> = ({ tables, relationship
         data: { 
           label: t.name,
           schema: t.schema,
-          rowCount: t.approximateRowCount
+          rowCount: t.approximateRowCount ?? 0
         }
       });
     });
@@ -126,13 +129,17 @@ export const LineageGraph: React.FC<LineageGraphProps> = ({ tables, relationship
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  // Update selection state when selectedNode changes
+  // Synchronize nodes and edges immediately when initialNodes/initialEdges or selectedNode changes
   React.useEffect(() => {
-    setNodes(nds => nds.map(n => ({
+    setNodes(initialNodes.map(n => ({
       ...n,
       selected: n.id === selectedNode
     })));
-  }, [selectedNode, setNodes]);
+  }, [initialNodes, selectedNode, setNodes]);
+
+  React.useEffect(() => {
+    setEdges(initialEdges);
+  }, [initialEdges, setEdges]);
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     onSelectNode(node.id);

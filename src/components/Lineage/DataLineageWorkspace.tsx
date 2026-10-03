@@ -16,6 +16,7 @@ interface DataLineageWorkspaceProps {
   tableDetailsCache: Record<string, TableDetailsResult>;
   onSelectTable: (table: DiscoveredTable) => void;
   onLoadTableDetails: (schema: string, name: string) => Promise<void>;
+  selectedSchema?: string;
 }
 
 export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
@@ -23,10 +24,11 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
   relationships,
   tableDetailsCache,
   onSelectTable,
-  onLoadTableDetails
+  onLoadTableDetails,
+  selectedSchema
 }) => {
   const [activeTab, setActiveTab] = useState<'graph' | 'overview' | 'pathfinder' | 'orphans'>('graph');
-  const [selectedNode, setSelectedNode] = useState<string | null>(null); // format: schema.name
+  const [selectedNode, setSelectedNode] = useState<string | null>(null); // format: ${schema}.${name}
   const [tableFilter, setTableFilter] = useState('');
   const [copiedSql, setCopiedSql] = useState(false);
   
@@ -34,32 +36,81 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
   const [pathFrom, setPathFrom] = useState<string>('');
   const [pathTo, setPathTo] = useState<string>('');
 
+  const isAllSchemas = !selectedSchema || selectedSchema === 'ALL';
+
+  // Schema-qualified and row-count synchronized tables
+  const schemaFilteredTables = useMemo(() => {
+    return tables.map(t => {
+      const cached = tableDetailsCache[`${t.schema}.${t.name}`];
+      const count = cached?.approximateRowCount !== undefined ? cached.approximateRowCount : t.approximateRowCount;
+      return {
+        ...t,
+        approximateRowCount: count ?? 0
+      };
+    }).filter(t => {
+      if (isAllSchemas) return true;
+      return t.schema === selectedSchema;
+    });
+  }, [tables, selectedSchema, isAllSchemas, tableDetailsCache]);
+
+  // Schema-qualified relationships
+  const schemaFilteredRelationships = useMemo(() => {
+    if (isAllSchemas) return relationships;
+    return relationships.filter(r => r.sourceSchema === selectedSchema && r.targetSchema === selectedSchema);
+  }, [relationships, selectedSchema, isAllSchemas]);
+
+  // Clear or adjust selected node if active schema changes
+  useEffect(() => {
+    if (selectedNode && !isAllSchemas) {
+      const [s] = selectedNode.split('.');
+      if (s !== selectedSchema) {
+        setSelectedNode(null);
+      }
+    }
+  }, [selectedSchema, isAllSchemas, selectedNode]);
+
+  // Automatically trigger details loading and table selection when a node is selected
+  useEffect(() => {
+    if (selectedNode) {
+      const [s, n] = selectedNode.split('.');
+      if (s && n) {
+        const found = schemaFilteredTables.find(t => t.schema === s && t.name === n);
+        if (found) {
+          onSelectTable(found);
+        }
+        if (!tableDetailsCache[selectedNode]) {
+          onLoadTableDetails(s, n);
+        }
+      }
+    }
+  }, [selectedNode, schemaFilteredTables, tableDetailsCache, onLoadTableDetails, onSelectTable]);
+
   const handleExport = (format: 'json' | 'csv' | 'excel') => {
     switch (format) {
       case 'json':
-        exportLineageToJson(tables, relationships, tableDetailsCache);
+        exportLineageToJson(schemaFilteredTables, schemaFilteredRelationships, tableDetailsCache);
         break;
       case 'csv':
-        exportLineageToCsv(tables, relationships);
+        exportLineageToCsv(schemaFilteredTables, schemaFilteredRelationships);
         break;
       case 'excel':
-        exportLineageToExcel(tables, relationships, tableDetailsCache);
+        exportLineageToExcel(schemaFilteredTables, schemaFilteredRelationships, tableDetailsCache);
         break;
     }
   };
 
-  const orphans = useMemo(() => detectOrphans(tables, relationships), [tables, relationships]);
+  const orphans = useMemo(() => detectOrphans(schemaFilteredTables, schemaFilteredRelationships), [schemaFilteredTables, schemaFilteredRelationships]);
 
   const joinPath = useMemo(() => {
     if (!pathFrom || !pathTo || pathFrom === pathTo) return null;
-    return findJoinPath(pathFrom, pathTo, tables, relationships);
-  }, [pathFrom, pathTo, tables, relationships]);
+    return findJoinPath(pathFrom, pathTo, schemaFilteredTables, schemaFilteredRelationships);
+  }, [pathFrom, pathTo, schemaFilteredTables, schemaFilteredRelationships]);
 
   const filteredTables = useMemo(() => {
-    if (!tableFilter.trim()) return tables;
+    if (!tableFilter.trim()) return schemaFilteredTables;
     const q = tableFilter.toLowerCase();
-    return tables.filter(t => t.name.toLowerCase().includes(q) || t.schema.toLowerCase().includes(q));
-  }, [tables, tableFilter]);
+    return schemaFilteredTables.filter(t => t.name.toLowerCase().includes(q) || t.schema.toLowerCase().includes(q));
+  }, [schemaFilteredTables, tableFilter]);
 
   const handleCopyJoinSql = (sql: string) => {
     navigator.clipboard.writeText(sql);
@@ -79,7 +130,7 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
               Data Lineage
             </h2>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800/60">
-              {tables.length} Tables
+              {schemaFilteredTables.length} Tables {!isAllSchemas && `(${selectedSchema})`}
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
@@ -126,11 +177,19 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
           {/* TAB 1: GRAPH ACTIVE OVERVIEW */}
           {activeTab === 'graph' && (
             <div className="p-3.5 space-y-4">
+              {/* Active Schema Filter Chip */}
+              <div className="flex items-center justify-between p-2 rounded-lg bg-slate-950/80 border border-slate-800 text-xs">
+                <span className="text-slate-400 font-medium text-[11px]">Scope:</span>
+                <span className="font-mono text-[11px] font-semibold text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/40">
+                  {isAllSchemas ? 'All Schemas' : selectedSchema}
+                </span>
+              </div>
+
               {/* Summary Stats Grid */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 flex flex-col">
                   <span className="text-[10px] uppercase font-bold text-slate-500">Relationships</span>
-                  <span className="text-base font-bold text-cyan-400 font-mono mt-0.5">{relationships.length}</span>
+                  <span className="text-base font-bold text-cyan-400 font-mono mt-0.5">{schemaFilteredRelationships.length}</span>
                   <span className="text-[10px] text-slate-400 mt-0.5">Active FK links</span>
                 </div>
                 <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 flex flex-col">
@@ -176,10 +235,15 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
                       >
                         <div className="flex items-center space-x-2 truncate">
                           <Database className={`w-3.5 h-3.5 flex-shrink-0 ${isSelected ? 'text-cyan-400' : 'text-indigo-400'}`} />
-                          <span className="truncate font-mono text-xs">{t.name}</span>
+                          <div className="truncate flex flex-col">
+                            <span className="truncate font-mono text-xs text-white">{t.name}</span>
+                            {isAllSchemas && (
+                              <span className="text-[9px] font-mono text-slate-500 truncate">{t.schema}</span>
+                            )}
+                          </div>
                         </div>
-                        <span className="text-[10px] text-slate-400 font-mono ml-2">
-                          {t.approximateRowCount !== undefined ? `${t.approximateRowCount.toLocaleString()}r` : ''}
+                        <span className="text-[10px] text-slate-400 font-mono ml-2 flex-shrink-0">
+                          {t.approximateRowCount !== undefined ? `${t.approximateRowCount.toLocaleString()} rows` : ''}
                         </span>
                       </button>
                     );
@@ -203,32 +267,35 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Schema Catalog</h3>
                 <span className="text-[10px] font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-slate-400">
-                  {tables.length} tables
+                  {schemaFilteredTables.length} tables
                 </span>
               </div>
               <div className="space-y-1.5">
-                {tables.map(t => (
-                  <button 
-                    key={`${t.schema}.${t.name}`}
-                    onClick={() => {
-                      setSelectedNode(`${t.schema}.${t.name}`);
-                      setActiveTab('graph');
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs bg-slate-950/60 hover:bg-slate-800 rounded-lg border border-slate-800/80 hover:border-slate-700 transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="font-semibold text-slate-200 group-hover:text-cyan-300 transition-colors font-mono">
-                        {t.name}
+                {schemaFilteredTables.map(t => {
+                  const nodeKey = `${t.schema}.${t.name}`;
+                  return (
+                    <button 
+                      key={nodeKey}
+                      onClick={() => {
+                        setSelectedNode(nodeKey);
+                        setActiveTab('graph');
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs bg-slate-950/60 hover:bg-slate-800 rounded-lg border border-slate-800/80 hover:border-slate-700 transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="font-semibold text-slate-200 group-hover:text-cyan-300 transition-colors font-mono">
+                          {t.name}
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {t.approximateRowCount?.toLocaleString() || 0} rows
+                        </span>
                       </div>
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        {t.approximateRowCount?.toLocaleString() || 0} rows
-                      </span>
-                    </div>
-                    {t.schema && t.schema !== 'public' && (
-                      <div className="text-[10px] text-slate-400 font-mono mt-0.5">Schema: {t.schema}</div>
-                    )}
-                  </button>
-                ))}
+                      <div className="text-[10px] text-cyan-400/80 font-mono mt-0.5">
+                        Schema: {t.schema || 'public'}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -253,9 +320,9 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
                     className="mt-1 w-full bg-slate-950 border border-slate-800 text-xs rounded-md p-2 text-slate-200 focus:outline-hidden focus:border-cyan-500 hover:border-slate-700 transition-colors cursor-pointer font-mono"
                   >
                     <option value="">— Select source table —</option>
-                    {tables.map(t => (
+                    {schemaFilteredTables.map(t => (
                       <option key={`${t.schema}.${t.name}`} value={`${t.schema}.${t.name}`}>
-                        {t.name} {t.schema !== 'public' ? `(${t.schema})` : ''}
+                        {t.name} ({t.schema})
                       </option>
                     ))}
                   </select>
@@ -268,9 +335,9 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
                     className="mt-1 w-full bg-slate-950 border border-slate-800 text-xs rounded-md p-2 text-slate-200 focus:outline-hidden focus:border-cyan-500 hover:border-slate-700 transition-colors cursor-pointer font-mono"
                   >
                     <option value="">— Select target table —</option>
-                    {tables.map(t => (
+                    {schemaFilteredTables.map(t => (
                       <option key={`${t.schema}.${t.name}`} value={`${t.schema}.${t.name}`}>
-                        {t.name} {t.schema !== 'public' ? `(${t.schema})` : ''}
+                        {t.name} ({t.schema})
                       </option>
                     ))}
                   </select>
@@ -293,9 +360,9 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
                           <ArrowRight className="w-3 h-3 text-slate-500" />
                         </div>
                         <div className="text-[11px] text-slate-300 pl-1">
-                          <span className="text-indigo-300">{step.sourceTable}</span>.{step.sourceColumn}
+                          <span className="text-indigo-300">{step.sourceSchema ? `${step.sourceSchema}.` : ''}{step.sourceTable}</span>.{step.sourceColumn}
                           <span className="text-slate-500 mx-1.5">=</span>
-                          <span className="text-emerald-300">{step.targetTable}</span>.{step.targetColumn}
+                          <span className="text-emerald-300">{step.targetSchema ? `${step.targetSchema}.` : ''}{step.targetTable}</span>.{step.targetColumn}
                         </div>
                       </div>
                     ))}
@@ -382,7 +449,7 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
                 {orphans.disconnectedTables.length === 0 && orphans.brokenRelationships.length === 0 && (
                   <div className="text-xs text-emerald-400 bg-emerald-950/30 border border-emerald-900/40 p-3 rounded-xl flex items-center space-x-2">
                     <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <span>All tables and relationships are fully connected without schema anomalies.</span>
+                    <span>All tables and relationships in this scope are fully connected without schema anomalies.</span>
                   </div>
                 )}
               </div>
@@ -434,17 +501,11 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
       <div className="flex-1 flex flex-col min-w-0">
         <div className="flex-1 relative bg-slate-950">
           <LineageGraph 
-            tables={tables} 
-            relationships={relationships} 
+            tables={schemaFilteredTables} 
+            relationships={schemaFilteredRelationships} 
             selectedNode={selectedNode}
             onSelectNode={(nodeId) => {
               setSelectedNode(nodeId);
-              if (nodeId) {
-                const [s, n] = nodeId.split('.');
-                if (!tableDetailsCache[nodeId]) {
-                  onLoadTableDetails(s, n);
-                }
-              }
             }}
           />
         </div>
@@ -455,9 +516,11 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800 bg-slate-950">
               <div className="flex items-center space-x-2">
                 <Database className="w-4 h-4 text-cyan-400" />
-                <h3 className="text-xs font-bold text-white font-mono">{selectedNode}</h3>
+                <h3 className="text-xs font-bold text-white font-mono">{selectedNode} Details</h3>
                 <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                  Inspected Node
+                  {tableDetailsCache[selectedNode]?.approximateRowCount !== undefined
+                    ? `${tableDetailsCache[selectedNode].approximateRowCount.toLocaleString()} rows`
+                    : `${schemaFilteredTables.find(t => `${t.schema}.${t.name}` === selectedNode)?.approximateRowCount?.toLocaleString() || 0} rows`}
                 </span>
               </div>
               <button 
@@ -474,17 +537,17 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
               <div className="flex-1 min-w-0">
                 <h4 className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-wider">Direct Dependencies (Outgoing)</h4>
                 <div className="space-y-1.5">
-                  {relationships.filter(r => `${r.sourceSchema}.${r.sourceTable}` === selectedNode).map(r => (
+                  {schemaFilteredRelationships.filter(r => `${r.sourceSchema}.${r.sourceTable}` === selectedNode).map(r => (
                     <div key={r.constraintName} className="text-xs bg-slate-950/80 border border-slate-800/80 p-2 rounded-lg flex items-center justify-between">
                       <div className="flex items-center space-x-1.5 truncate">
                         <Link className="w-3 h-3 text-cyan-400 flex-shrink-0" />
                         <span className="text-slate-300 font-mono">{r.sourceColumn}</span>
                         <span className="text-slate-600">→</span>
-                        <span className="text-emerald-300 font-mono font-medium">{r.targetTable}.{r.targetColumn}</span>
+                        <span className="text-emerald-300 font-mono font-medium">{r.targetSchema}.{r.targetTable}.{r.targetColumn}</span>
                       </div>
                     </div>
                   ))}
-                  {relationships.filter(r => `${r.sourceSchema}.${r.sourceTable}` === selectedNode).length === 0 && (
+                  {schemaFilteredRelationships.filter(r => `${r.sourceSchema}.${r.sourceTable}` === selectedNode).length === 0 && (
                     <div className="text-xs text-slate-400 italic bg-slate-950/40 p-2 rounded border border-slate-800/60">
                       No outgoing foreign keys.
                     </div>
@@ -496,7 +559,7 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
               <div className="flex-1 min-w-0">
                 <h4 className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-wider">Referenced By (Incoming)</h4>
                 <div className="space-y-1.5">
-                  {relationships.filter(r => `${r.targetSchema}.${r.targetTable}` === selectedNode).map(r => (
+                  {schemaFilteredRelationships.filter(r => `${r.targetSchema}.${r.targetTable}` === selectedNode).map(r => (
                     <div key={r.constraintName} className="text-xs bg-slate-950/80 border border-slate-800/80 p-2 rounded-lg flex items-center justify-between">
                       <div className="flex items-center space-x-1.5 truncate">
                         <Link className="w-3 h-3 text-indigo-400 flex-shrink-0" />
@@ -506,7 +569,7 @@ export const DataLineageWorkspace: React.FC<DataLineageWorkspaceProps> = ({
                       </div>
                     </div>
                   ))}
-                  {relationships.filter(r => `${r.targetSchema}.${r.targetTable}` === selectedNode).length === 0 && (
+                  {schemaFilteredRelationships.filter(r => `${r.targetSchema}.${r.targetTable}` === selectedNode).length === 0 && (
                     <div className="text-xs text-slate-400 italic bg-slate-950/40 p-2 rounded border border-slate-800/60">
                       No incoming references.
                     </div>
