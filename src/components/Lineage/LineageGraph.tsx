@@ -14,20 +14,49 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { DiscoveredTable, DatabaseRelationship } from '../../types/database';
-import { Database } from 'lucide-react';
+import { Database, Layers, Key, Hash } from 'lucide-react';
 
 const TableNode = ({ data, selected }: any) => {
   return (
-    <div className={`bg-slate-900 border ${selected ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'border-slate-700'} rounded-md min-w-[150px] shadow-lg`}>
-      <div className="bg-slate-800/80 px-3 py-2 rounded-t-md flex items-center border-b border-slate-700">
-        <Database className="w-3.5 h-3.5 mr-2 text-indigo-400" />
-        <div className="text-xs font-semibold text-white">{data.label}</div>
+    <div
+      className={`rounded-xl border transition-all duration-200 min-w-[200px] shadow-xl overflow-hidden ${
+        selected
+          ? 'bg-slate-900 border-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.3)] ring-1 ring-cyan-500/60'
+          : 'bg-slate-900/95 border-slate-700/80 hover:border-slate-500 hover:shadow-2xl'
+      }`}
+    >
+      {/* Node Header */}
+      <div
+        className={`px-3.5 py-2.5 flex items-center justify-between border-b transition-colors ${
+          selected
+            ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-200'
+            : 'bg-slate-800/90 border-slate-700/80 text-white'
+        }`}
+      >
+        <div className="flex items-center space-x-2 truncate min-w-0">
+          <Database className={`w-3.5 h-3.5 flex-shrink-0 ${selected ? 'text-cyan-400' : 'text-indigo-400'}`} />
+          <div className="text-xs font-bold truncate tracking-tight">{data.label}</div>
+        </div>
+        {data.schema && data.schema !== 'public' && data.schema !== 'imported' && (
+          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-900 text-slate-400 border border-slate-700 flex-shrink-0 ml-1">
+            {data.schema}
+          </span>
+        )}
       </div>
-      <div className="p-2 text-[10px] text-slate-400">
-        {data.rowCount?.toLocaleString()} rows
+
+      {/* Node Body */}
+      <div className="p-2.5 flex items-center justify-between text-[11px] text-slate-400 font-mono bg-slate-950/70">
+        <div className="flex items-center space-x-1.5">
+          <Layers className="w-3 h-3 text-slate-500" />
+          <span>{data.rowCount !== undefined ? `${data.rowCount.toLocaleString()} rows` : 'Table'}</span>
+        </div>
+        <div className="flex items-center space-x-1">
+          <span className={`w-2 h-2 rounded-full ${selected ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400/80'}`} />
+        </div>
       </div>
-      <Handle type="target" position={Position.Top} className="w-2 h-2 bg-slate-600 border-none" />
-      <Handle type="source" position={Position.Bottom} className="w-2 h-2 bg-slate-600 border-none" />
+
+      <Handle type="target" position={Position.Top} className="!w-2.5 !h-2.5 !bg-cyan-500 !border-2 !border-slate-900" />
+      <Handle type="source" position={Position.Bottom} className="!w-2.5 !h-2.5 !bg-cyan-500 !border-2 !border-slate-900" />
     </div>
   );
 };
@@ -48,8 +77,8 @@ export const LineageGraph: React.FC<LineageGraphProps> = ({ tables, relationship
     const nodes: Node[] = [];
     const edges: Edge[] = [];
     
-    // Grid layout calculation
-    const cols = Math.ceil(Math.sqrt(tables.length));
+    // Grid layout calculation with generous spacing to prevent overlap
+    const cols = Math.max(1, Math.ceil(Math.sqrt(tables.length * 1.5)));
     
     tables.forEach((t, i) => {
       const row = Math.floor(i / cols);
@@ -58,7 +87,7 @@ export const LineageGraph: React.FC<LineageGraphProps> = ({ tables, relationship
       nodes.push({
         id: `${t.schema}.${t.name}`,
         type: 'tableNode',
-        position: { x: col * 250, y: row * 150 },
+        position: { x: col * 300, y: row * 180 },
         data: { 
           label: t.name,
           schema: t.schema,
@@ -76,13 +105,17 @@ export const LineageGraph: React.FC<LineageGraphProps> = ({ tables, relationship
         source: sourceId,
         target: targetId,
         label: `${r.sourceColumn} → ${r.targetColumn}`,
-        labelStyle: { fill: '#94a3b8', fontSize: 10, fontWeight: 500 },
-        labelBgStyle: { fill: '#0f172a', stroke: '#1e293b' },
-        animated: false,
-        style: { stroke: '#475569', strokeWidth: 1.5 },
+        labelStyle: { fill: '#cbd5e1', fontSize: 10, fontWeight: 600, fontFamily: 'monospace' },
+        labelBgStyle: { fill: '#090d16', stroke: '#334155', strokeWidth: 1, rx: 6, ry: 6 },
+        labelBgPadding: [6, 4],
+        labelBgBorderRadius: 6,
+        animated: true,
+        style: { stroke: '#0ea5e9', strokeWidth: 1.75 },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: '#475569',
+          color: '#0ea5e9',
+          width: 15,
+          height: 15
         }
       });
     });
@@ -119,17 +152,18 @@ export const LineageGraph: React.FC<LineageGraphProps> = ({ tables, relationship
       onPaneClick={onPaneClick}
       nodeTypes={nodeTypes}
       fitView
-      className="bg-slate-950"
+      className="bg-slate-950 select-none"
     >
-      <Background color="#1e293b" gap={20} size={1} />
-      <Controls className="bg-slate-900 border-slate-700 fill-slate-300" />
+      <Background color="#1e293b" gap={24} size={1} />
+      <Controls className="!bg-slate-900 !border-slate-700 !shadow-2xl" showInteractive={false} />
       <MiniMap 
         nodeColor={(n) => {
-          if (n.selected) return '#f59e0b';
+          if (n.selected) return '#06b6d4';
           return '#334155';
         }}
-        maskColor="rgba(15, 23, 42, 0.7)"
-        className="bg-slate-900 border border-slate-800"
+        nodeStrokeColor="#1e293b"
+        maskColor="rgba(2, 6, 23, 0.75)"
+        className="!bg-slate-950 !border !border-slate-800 rounded-xl overflow-hidden shadow-2xl"
       />
     </ReactFlow>
   );

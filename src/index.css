@@ -99,6 +99,52 @@ textarea, pre, table {
   display: none;
 }
 
+/* =========================================================================
+   Data Lineage / React Flow Dark Theme Overrides
+   ========================================================================= */
+.react-flow__controls {
+  background-color: #0f172a !important;
+  border: 1px solid #334155 !important;
+  border-radius: 0.5rem !important;
+  overflow: hidden !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+}
+
+.react-flow__controls-button {
+  background-color: #0f172a !important;
+  border-bottom: 1px solid #1e293b !important;
+  color: #94a3b8 !important;
+  fill: #94a3b8 !important;
+  transition: all 0.15s ease !important;
+}
+
+.react-flow__controls-button:hover {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  fill: #f8fafc !important;
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor !important;
+}
+
+.react-flow__minimap {
+  background-color: #020617 !important;
+  border: 1px solid #334155 !important;
+  border-radius: 0.75rem !important;
+  overflow: hidden !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6) !important;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(2, 6, 23, 0.75) !important;
+}
+
+.react-flow__minimap-node {
+  fill: #334155 !important;
+  stroke: #1e293b !important;
+}
+
 @media print {
   @page {
     size: landscape;
