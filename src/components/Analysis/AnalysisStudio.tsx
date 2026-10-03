@@ -238,8 +238,7 @@ export const AnalysisStudio: React.FC<AnalysisStudioProps> = ({
 
   const handleRunQuery = async (sql: string, queryMeta: GeneratedAnalysisQuery) => {
     saveHistoryItem(queryMeta);
-    setIsModalOpen(false);
-    await onExecuteQuery(sql, queryMeta);
+    return await onExecuteQuery(sql, queryMeta);
   };
 
   const handleEditInEditor = (sql: string) => {

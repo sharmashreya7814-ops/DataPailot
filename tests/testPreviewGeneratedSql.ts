@@ -265,5 +265,61 @@ export async function runPreviewGeneratedSqlTests(): Promise<TestResult[]> {
     sqlPreviewSource.includes('e.target === e.currentTarget') && sqlPreviewSource.includes('onClose()')
   );
 
+  record(
+    '27. SqlPreviewModal subtitle clearly displays Operation and Schema-qualified table context',
+    sqlPreviewSource.includes('subtitleContext') &&
+    sqlPreviewSource.includes('OPERATION') &&
+    sqlPreviewSource.includes('analytics_practice.products')
+  );
+
+  record(
+    '28. SqlPreviewModal shows Tables Referenced with prominent count badge',
+    sqlPreviewSource.includes('Tables Referenced') &&
+    sqlPreviewSource.includes('query.tablesUsed.length')
+  );
+
+  record(
+    '29. SqlPreviewModal shows Columns Utilized with column count and chips',
+    sqlPreviewSource.includes('Columns Utilized') &&
+    sqlPreviewSource.includes('query.columnsUsed.length')
+  );
+
+  record(
+    '30. SqlPreviewModal includes PostgreSQL / Read Only / Validated status badges',
+    sqlPreviewSource.includes('Read Only') &&
+    sqlPreviewSource.includes('Validated') &&
+    sqlPreviewSource.includes('dbName')
+  );
+
+  record(
+    '31. SqlPreviewModal includes compact security banner with ShieldCheck icon',
+    sqlPreviewSource.includes('ShieldCheck') &&
+    sqlPreviewSource.includes('Validated against') &&
+    sqlPreviewSource.includes('read-only safety rules')
+  );
+
+  record(
+    '32. SqlPreviewModal shows loading state "Executing Query..." with spinner on execution',
+    sqlPreviewSource.includes('Executing Query...') &&
+    sqlPreviewSource.includes('Loader2') &&
+    sqlPreviewSource.includes('disabled={isWorking}')
+  );
+
+  record(
+    '33. SqlPreviewModal renders scrollable table preview on successful execution',
+    sqlPreviewSource.includes('executionResult') &&
+    sqlPreviewSource.includes('rows returned') &&
+    sqlPreviewSource.includes('Execution time:') &&
+    sqlPreviewSource.includes('<table')
+  );
+
+  record(
+    '34. SqlPreviewModal displays clean DataPilot error state without window.alert on execution failure',
+    sqlPreviewSource.includes('executionError') &&
+    sqlPreviewSource.includes('AlertTriangle') &&
+    !sqlPreviewSource.includes('window.alert') &&
+    !sqlPreviewSource.includes('alert(')
+  );
+
   return results;
 }
