@@ -4,57 +4,84 @@ html, body, #root {
   background-color: #020617;
   color: #f8fafc;
   min-height: 100%;
+  color-scheme: dark;
 }
 
-/* Analysis Toolkit Scoped Dark Scrollbar Utilities */
+/* =========================================================================
+   DataPilot Unified Dark Scrollbar System
+   Applied to all application-owned scroll containers across DataPilot.
+   ========================================================================= */
+
+/* Standard Firefox & modern standards-compliant scrollbar styling */
+#root,
+#root *,
+#datapilot-workspace,
+#datapilot-workspace *,
+.datapilot-scrollbar,
+.custom-scrollbar,
+.analysis-scroll-dark,
 .analysis-tabs-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
-  -webkit-overflow-scrolling: touch;
+  scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
 }
 
+/* WebKit / Chromium / Edge / Safari custom dark scrollbars */
+#root *::-webkit-scrollbar,
+#datapilot-workspace *::-webkit-scrollbar,
+.datapilot-scrollbar::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar,
+.analysis-scroll-dark::-webkit-scrollbar,
 .analysis-tabs-scroll::-webkit-scrollbar {
-  height: 5px;
-  width: 5px;
+  width: 6px;
+  height: 6px;
 }
 
+#root *::-webkit-scrollbar-track,
+#datapilot-workspace *::-webkit-scrollbar-track,
+.datapilot-scrollbar::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track,
+.analysis-scroll-dark::-webkit-scrollbar-track,
 .analysis-tabs-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
+#root *::-webkit-scrollbar-thumb,
+#datapilot-workspace *::-webkit-scrollbar-thumb,
+.datapilot-scrollbar::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.analysis-scroll-dark::-webkit-scrollbar-thumb,
 .analysis-tabs-scroll::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.4);
+  background-color: rgba(100, 116, 139, 0.4);
   border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
 }
 
+#root *::-webkit-scrollbar-thumb:hover,
+#datapilot-workspace *::-webkit-scrollbar-thumb:hover,
+.datapilot-scrollbar::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.analysis-scroll-dark::-webkit-scrollbar-thumb:hover,
 .analysis-tabs-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.7);
+  background-color: rgba(148, 163, 184, 0.7);
 }
 
-.analysis-scroll-dark {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(71, 85, 105, 0.5) transparent;
-  -webkit-overflow-scrolling: touch;
-}
-
-.analysis-scroll-dark::-webkit-scrollbar {
-  height: 6px;
-  width: 6px;
-}
-
-.analysis-scroll-dark::-webkit-scrollbar-track {
+#root *::-webkit-scrollbar-corner,
+#datapilot-workspace *::-webkit-scrollbar-corner,
+.datapilot-scrollbar::-webkit-scrollbar-corner,
+.custom-scrollbar::-webkit-scrollbar-corner,
+.analysis-scroll-dark::-webkit-scrollbar-corner,
+.analysis-tabs-scroll::-webkit-scrollbar-corner {
   background: transparent;
 }
 
-.analysis-scroll-dark::-webkit-scrollbar-thumb {
-  background: rgba(71, 85, 105, 0.4);
-  border-radius: 9999px;
+/* Specifically ensure code blocks, tables, and textareas inherit dark scrollbar */
+textarea, pre, table {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
 }
 
-.analysis-scroll-dark::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.7);
-}
-
+/* Reusable utility to hide scrollbar where explicitly needed while preserving scroll functionality */
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
