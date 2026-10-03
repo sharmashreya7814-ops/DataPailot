@@ -554,7 +554,7 @@ export function runDashboardAndFilterTests(): { name: string; passed: boolean; e
 
   // --- PHASE 11: DASHBOARD DELETE CONFIRMATION & DIALOG CONSISTENCY ---
   try {
-    const workspaceSourcePath = path.resolve(__dirname, '../src/components/Dashboard/DashboardWorkspace.tsx');
+    const workspaceSourcePath = path.join(process.cwd(), 'src', 'components', 'Dashboard', 'DashboardWorkspace.tsx');
     const workspaceSource = fs.readFileSync(workspaceSourcePath, 'utf8');
 
     // Test 1: Verify no native window.confirm() or confirm() calls remain in DashboardWorkspace
