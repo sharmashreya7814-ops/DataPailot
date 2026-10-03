@@ -13,8 +13,7 @@ import {
   LayoutDashboard,
   Loader2,
   CheckCircle2,
-  AlertTriangle,
-  Database
+  AlertTriangle
 } from 'lucide-react';
 import { GeneratedAnalysisQuery } from '../../types/analysis';
 import { QueryResult } from '../../types/database';
@@ -122,10 +121,10 @@ export const SqlPreviewModal: React.FC<SqlPreviewModalProps> = ({
     }
   };
 
-  // Build Operation subtitle context (e.g. "BASIC OPERATION · analytics_practice.products")
-  const operationType = (query.category ? `${query.category.replace(/_/g, ' ')} OPERATION` : 'BASIC OPERATION').toUpperCase();
+  // Subtitle context (e.g. "Retrieve specific columns from analytics_practice.products")
   const primaryTable = query.tablesUsed[0] || 'analytics_practice.products';
-  const subtitleContext = `${operationType} · ${primaryTable}`;
+  const subtitleContext = query.description || `Retrieve specific columns from ${primaryTable}`;
+  const operationType = (query.category ? `${query.category.replace(/_/g, ' ')} OPERATION` : 'BASIC OPERATION').toUpperCase();
 
   const isWorking = isExecuting || isRunning;
 
@@ -139,32 +138,36 @@ export const SqlPreviewModal: React.FC<SqlPreviewModalProps> = ({
       onClick={(e) => {
         if (e.target === e.currentTarget && !isWorking) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
     >
       <div
         id="sql-preview-modal-card"
-        className="w-full max-w-3xl lg:max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-200 max-h-[90vh]"
+        className="w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-xl shadow-2xl flex flex-col overflow-hidden text-slate-200"
       >
-        {/* HEADER */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
-          <div className="flex items-center space-x-3.5">
-            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-indigo-400 flex items-center justify-center">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
               <Code2 className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center space-x-2.5">
+              <div className="flex items-center space-x-2">
                 <h3
                   id="sql-preview-modal-title"
-                  className="text-base font-bold text-white tracking-tight"
+                  className="text-base font-semibold text-white tracking-tight"
                 >
                   {query.name || 'Select Columns'}
                 </h3>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                  {query.category || 'BASIC'}
+                </span>
               </div>
               <p
                 id="sql-preview-modal-description"
-                className="text-xs font-mono font-medium text-indigo-400/90 mt-0.5 tracking-wide flex items-center space-x-1.5"
+                className="text-xs text-slate-400 mt-0.5"
+                data-operation-context={operationType}
               >
-                <span>{subtitleContext}</span>
+                {subtitleContext}
               </p>
             </div>
           </div>
@@ -180,123 +183,101 @@ export const SqlPreviewModal: React.FC<SqlPreviewModalProps> = ({
           </button>
         </div>
 
-        {/* BODY */}
-        <div className="p-5 sm:p-6 space-y-4 overflow-y-auto analysis-scroll-dark flex-1">
-          {/* CARDS: TABLES REFERENCED & COLUMNS UTILIZED */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            {/* Tables Referenced Card */}
-            <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80 flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-2 text-xs font-semibold text-slate-300">
-                  <Database className="w-4 h-4 text-emerald-400" />
-                  <span>Tables Referenced</span>
-                </div>
-                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  {query.tablesUsed.length} {query.tablesUsed.length === 1 ? 'Table' : 'Tables'}
-                </span>
+        {/* Body Metadata & SQL */}
+        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto analysis-scroll-dark">
+          {/* Metadata badges: Tables & Columns used */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800">
+              <div className="flex items-center space-x-1.5 text-xs font-medium text-slate-400 mb-1.5">
+                <TableIcon className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Tables Referenced ({query.tablesUsed.length})</span>
               </div>
-              <div className="flex flex-wrap gap-1.5 mt-1">
+              <div className="flex flex-wrap gap-1.5">
                 {query.tablesUsed.map((t, idx) => (
                   <span
                     key={idx}
-                    className="text-xs font-mono px-2.5 py-1 rounded-md bg-slate-900/90 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1"
+                    className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
                   >
-                    <span>{t}</span>
+                    {t}
                   </span>
                 ))}
               </div>
             </div>
 
-            {/* Columns Utilized Card */}
-            <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80 flex flex-col justify-between">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-2 text-xs font-semibold text-slate-300">
-                  <Columns className="w-4 h-4 text-cyan-400" />
-                  <span>Columns Utilized</span>
-                </div>
-                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                  {query.columnsUsed.length} {query.columnsUsed.length === 1 ? 'column' : 'columns'}
-                </span>
+            <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800">
+              <div className="flex items-center space-x-1.5 text-xs font-medium text-slate-400 mb-1.5">
+                <Columns className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Columns Utilized ({query.columnsUsed.length})</span>
               </div>
-              <div className="flex flex-wrap gap-1.5 mt-1 max-h-24 overflow-y-auto pr-1 analysis-scroll-dark">
+              <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto analysis-scroll-dark">
                 {query.columnsUsed.length > 0 ? (
                   query.columnsUsed.map((c, idx) => (
                     <span
                       key={idx}
-                      className="text-xs font-mono px-2.5 py-1 rounded-md bg-slate-900/90 text-slate-300 border border-slate-700/80 hover:border-slate-600 transition-colors"
+                      className="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700"
                     >
                       {c}
                     </span>
                   ))
                 ) : (
-                  <span className="text-xs text-slate-500 italic py-0.5">All table columns or row count</span>
+                  <span className="text-xs text-slate-500 italic">All table columns or row count</span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* GENERATED SQL SECTION */}
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center space-x-2.5">
-                <div className="flex items-center space-x-1.5 text-xs font-semibold text-slate-200">
-                  <Layers className="w-4 h-4 text-indigo-400" />
-                  <span>Generated {dbName} Query</span>
-                </div>
-                {/* Status Badges: PostgreSQL / Read Only / Validated */}
-                <div className="flex items-center space-x-1.5">
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/25">
-                    {dbName}
-                  </span>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
-                    Read Only
-                  </span>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/25">
-                    Validated
-                  </span>
-                </div>
+          {/* SQL Code Block */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2 text-xs font-semibold text-slate-300">
+                <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Generated {dbName} Query</span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                  {dbName}
+                </span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                  Read Only
+                </span>
+                <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                  Validated
+                </span>
               </div>
-
-              {/* Copy SQL Button */}
               <button
                 type="button"
                 id="btn-copy-generated-sql"
                 onClick={handleCopy}
-                className="flex items-center space-x-1.5 px-2.5 py-1 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors"
+                className="flex items-center space-x-1 px-2.5 py-1 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-750 rounded border border-slate-700 transition-colors"
               >
                 {copied ? (
                   <>
                     <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="text-emerald-400 font-medium">Copied!</span>
+                    <span className="text-emerald-400">Copied!</span>
                   </>
                 ) : (
                   <>
-                    <Copy className="w-3.5 h-3.5 text-slate-400" />
+                    <Copy className="w-3.5 h-3.5" />
                     <span>Copy SQL</span>
                   </>
                 )}
               </button>
             </div>
 
-            {/* Code Block */}
-            <div className="relative rounded-xl bg-slate-950 border border-slate-800/90 overflow-hidden shadow-inner">
-              <pre className="p-4 font-mono text-xs text-emerald-300/95 leading-relaxed overflow-x-auto whitespace-pre selection:bg-emerald-900/50 max-h-56 analysis-tabs-scroll">
-                {query.sql}
-              </pre>
-            </div>
+            <pre className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 font-mono text-xs text-emerald-300 leading-relaxed overflow-x-auto whitespace-pre selection:bg-emerald-900/50 analysis-tabs-scroll max-h-36">
+              {query.sql}
+            </pre>
           </div>
 
-          {/* SAFETY / VALIDATION BANNER */}
-          <div className="flex items-center space-x-2 text-[11px] text-slate-300 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+          {/* Safety & Compliance notice */}
+          <div className="flex items-center space-x-2 text-[11px] text-slate-400 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/80">
             <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
             <span>
               Validated against {dbName} read-only safety rules. Query will be executed safely against your data.
             </span>
           </div>
 
-          {/* EXECUTION ERROR BANNER */}
+          {/* Execution Error Banner (if error occurred) */}
           {executionError && (
-            <div className="p-3.5 rounded-xl bg-rose-950/30 border border-rose-800/60 text-xs text-rose-300 flex items-start space-x-2.5 animate-in fade-in duration-100">
+            <div className="p-2.5 rounded-lg bg-rose-950/30 border border-rose-800/60 text-xs text-rose-300 flex items-start space-x-2">
               <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
               <div className="space-y-0.5 flex-1">
                 <span className="font-semibold text-rose-200 block">Execution Error</span>
@@ -305,105 +286,85 @@ export const SqlPreviewModal: React.FC<SqlPreviewModalProps> = ({
             </div>
           )}
 
-          {/* RESULT PREVIEW TABLE */}
+          {/* Compact Execution Results (if executed) */}
           {executionResult && (
-            <div className="space-y-2 pt-1 animate-in fade-in duration-150">
-              {/* Result Summary Bar */}
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs">
-                <div className="flex items-center space-x-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center justify-between p-2 rounded-lg bg-slate-950/60 border border-slate-800 text-xs">
+                <div className="flex items-center space-x-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                   <span className="font-semibold text-slate-200">Execution Results</span>
                 </div>
-                <div className="flex items-center space-x-2 font-mono text-[11px]">
-                  <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-medium">
+                <div className="flex items-center space-x-2 font-mono text-[10px]">
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-medium">
                     {executionResult.rowCount} rows returned
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
                     Execution time: {executionResult.executionTimeMs} ms
                   </span>
                 </div>
               </div>
 
-              {/* Scrollable Result Table */}
-              <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
-                <div className="max-h-56 overflow-auto analysis-scroll-dark">
-                  {executionResult.rows.length === 0 ? (
-                    <div className="p-6 text-center text-xs text-slate-400">
-                      Query executed successfully, but returned 0 rows.
-                    </div>
-                  ) : (
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead className="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
-                        <tr>
-                          {executionResult.columns.map((col, idx) => (
-                            <th
-                              key={idx}
-                              className="px-3.5 py-2 font-mono font-medium text-slate-300 text-[11px] whitespace-nowrap bg-slate-900"
-                            >
-                              <div className="flex items-center space-x-1.5">
-                                <span>{col.name}</span>
-                                {col.dataType && (
-                                  <span className="text-[9px] text-slate-400 font-normal">
-                                    ({col.dataType})
-                                  </span>
-                                )}
-                              </div>
-                            </th>
+              <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950 max-h-32 overflow-auto analysis-scroll-dark">
+                {executionResult.rows.length === 0 ? (
+                  <div className="p-3 text-center text-xs text-slate-400">
+                    Query executed successfully (0 rows returned).
+                  </div>
+                ) : (
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
+                      <tr>
+                        {executionResult.columns.map((col, idx) => (
+                          <th
+                            key={idx}
+                            className="px-2.5 py-1.5 font-mono font-medium text-slate-300 text-[10px] whitespace-nowrap bg-slate-900"
+                          >
+                            {col.name}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-mono text-[10px]">
+                      {executionResult.rows.map((row, rIdx) => (
+                        <tr key={rIdx} className="hover:bg-slate-850/50">
+                          {executionResult.columns.map((col, cIdx) => (
+                            <td key={cIdx} className="px-2.5 py-1 text-slate-300 whitespace-nowrap">
+                              {row[col.name] === null || row[col.name] === undefined
+                                ? 'NULL'
+                                : typeof row[col.name] === 'object'
+                                ? JSON.stringify(row[col.name])
+                                : String(row[col.name])}
+                            </td>
                           ))}
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
-                        {executionResult.rows.map((row, rIdx) => (
-                          <tr key={rIdx} className="hover:bg-slate-850/50 transition-colors">
-                            {executionResult.columns.map((col, cIdx) => {
-                              const val = row[col.name];
-                              const displayVal = val === null || val === undefined ? (
-                                <span className="text-slate-600 italic">NULL</span>
-                              ) : typeof val === 'object' ? (
-                                JSON.stringify(val)
-                              ) : (
-                                String(val)
-                              );
-
-                              return (
-                                <td key={cIdx} className="px-3.5 py-1.5 text-slate-300 whitespace-nowrap">
-                                  {displayVal}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           )}
         </div>
 
-        {/* ACTION BAR (FOOTER) */}
-        <div className="px-6 py-3.5 border-t border-slate-800 bg-slate-950/80 flex flex-wrap items-center justify-between gap-3">
-          {/* Tertiary: Close */}
+        {/* Footer Actions */}
+        <div className="px-6 py-3.5 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between">
           <button
             type="button"
             id="btn-cancel-sql-preview"
             onClick={onClose}
             disabled={isWorking}
-            className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-40"
+            className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-40"
           >
             Close
           </button>
 
-          <div className="flex items-center space-x-2.5">
-            {/* Secondary: Add to Dashboard */}
+          <div className="flex items-center space-x-3">
             {onAddToDashboard && (
               <button
                 type="button"
                 id="btn-add-analysis-to-dashboard"
                 onClick={() => onAddToDashboard(query)}
                 disabled={isWorking}
-                className="flex items-center space-x-1.5 px-3.5 py-2 text-xs font-medium text-emerald-300 bg-emerald-950/50 hover:bg-emerald-900/70 border border-emerald-800/60 rounded-xl transition-colors disabled:opacity-40"
+                className="flex items-center space-x-1.5 px-4 py-2 text-xs font-medium text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-700/60 rounded-lg transition-colors disabled:opacity-40"
                 title="Add this analysis query directly to an executive dashboard"
               >
                 <LayoutDashboard className="w-3.5 h-3.5 text-emerald-400" />
@@ -411,19 +372,17 @@ export const SqlPreviewModal: React.FC<SqlPreviewModalProps> = ({
               </button>
             )}
 
-            {/* Secondary: Open in SQL Editor */}
             <button
               type="button"
               id="btn-edit-in-sql-editor"
               onClick={() => onEditInEditor(query.sql)}
               disabled={isWorking}
-              className="flex items-center space-x-1.5 px-3.5 py-2 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-colors disabled:opacity-40"
+              className="flex items-center space-x-1.5 px-4 py-2 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-lg transition-colors disabled:opacity-40"
             >
               <Edit3 className="w-3.5 h-3.5 text-slate-400" />
               <span>Open in SQL Editor</span>
             </button>
 
-            {/* Primary: Execute & Preview Results */}
             <button
               type="button"
               id="btn-execute-analysis-query"
@@ -431,7 +390,7 @@ export const SqlPreviewModal: React.FC<SqlPreviewModalProps> = ({
               disabled={isWorking}
               aria-label="Execute & Preview Results"
               title="Execute / Preview Results"
-              className="flex items-center space-x-2 px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-700/60 disabled:cursor-wait rounded-xl transition-all shadow-lg shadow-emerald-950 hover:scale-[1.02] active:scale-[0.98]"
+              className="flex items-center space-x-1.5 px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg transition-colors shadow-lg shadow-emerald-950/40"
             >
               {isWorking ? (
                 <>
@@ -441,7 +400,7 @@ export const SqlPreviewModal: React.FC<SqlPreviewModalProps> = ({
               ) : (
                 <>
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Execute & Preview Results</span>
+                  <span>Execute / Preview Results</span>
                 </>
               )}
             </button>
