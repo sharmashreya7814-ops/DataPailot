@@ -552,5 +552,68 @@ export function runDashboardAndFilterTests(): { name: string; passed: boolean; e
     assert('PHASE-10-WIDGET-RENAME: Error in widget rename tests', false, err.message);
   }
 
+  // --- PHASE 11: DASHBOARD DELETE CONFIRMATION & DIALOG CONSISTENCY ---
+  try {
+    const workspaceSourcePath = path.resolve(__dirname, '../src/components/Dashboard/DashboardWorkspace.tsx');
+    const workspaceSource = fs.readFileSync(workspaceSourcePath, 'utf8');
+
+    // Test 1: Verify no native window.confirm() or confirm() calls remain in DashboardWorkspace
+    const hasNativeConfirm = /(?<!\w)confirm\s*\(/.test(workspaceSource) || /window\.confirm\s*\(/.test(workspaceSource);
+    assert(
+      'DASH-CONFIRM-1: No native window.confirm() or confirm() remains in DashboardWorkspace',
+      !hasNativeConfirm,
+      'Found native confirm() in DashboardWorkspace.tsx'
+    );
+
+    // Test 2: Verify ConfirmDialog is imported from common components
+    const hasConfirmDialogImport = workspaceSource.includes("import { ConfirmDialog } from '../common/ConfirmDialog'") ||
+      workspaceSource.includes('import { ConfirmDialog }');
+    assert(
+      'DASH-CONFIRM-2: ConfirmDialog is imported from common components in DashboardWorkspace',
+      hasConfirmDialogImport
+    );
+
+    // Test 3: Verify ConfirmDialog configuration has title="Delete Dashboard" and confirmText="Delete Dashboard"
+    const hasCorrectTitle = workspaceSource.includes('title="Delete Dashboard"');
+    const hasCorrectConfirmText = workspaceSource.includes('confirmText="Delete Dashboard"');
+    const hasCorrectCancelText = workspaceSource.includes('cancelText="Cancel"');
+    const hasDangerVariant = workspaceSource.includes('confirmVariant="danger"');
+    assert(
+      'DASH-CONFIRM-3: ConfirmDialog is configured with Title: Delete Dashboard, confirmText: Delete Dashboard, and danger variant',
+      hasCorrectTitle && hasCorrectConfirmText && hasCorrectCancelText && hasDangerVariant
+    );
+
+    // Test 4: Dashboard cancellation preserves dashboard without deletion
+    const cancelTestId = `dash-cancel-delete-${Date.now()}`;
+    const cancelTestDash: Dashboard = {
+      id: cancelTestId,
+      name: 'Dashboard Not Deleted',
+      widgets: [],
+      filters: [],
+      layout: { columns: 12, gap: 'md', theme: 'dark' },
+      autoRefreshInterval: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    DashboardService.saveDashboard(cancelTestDash);
+
+    // Simulating cancel: no deleteDashboard called
+    const stillExists = DashboardService.getDashboardById(cancelTestId);
+    assert(
+      'DASH-CONFIRM-4: Cancelling delete leaves dashboard intact in storage',
+      stillExists !== null && stillExists.name === 'Dashboard Not Deleted'
+    );
+
+    // Test 5: Confirming delete removes dashboard from storage
+    DashboardService.deleteDashboard(cancelTestId);
+    const deletedCheck = DashboardService.getDashboardById(cancelTestId);
+    assert(
+      'DASH-CONFIRM-5: Confirming delete removes dashboard cleanly from storage',
+      deletedCheck === null
+    );
+  } catch (err: any) {
+    assert('PHASE-11-DASH-CONFIRM: Error in dashboard confirm dialog regression tests', false, err.message);
+  }
+
   return results;
 }

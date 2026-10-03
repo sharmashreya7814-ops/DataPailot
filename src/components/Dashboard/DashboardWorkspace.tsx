@@ -52,6 +52,7 @@ import { DashboardTemplatesModal } from './DashboardTemplatesModal';
 import { DashboardAiBuilderModal } from './DashboardAiBuilderModal';
 import { DashboardInsightsDrawer } from './DashboardInsightsDrawer';
 import { AddToDashboardModal } from './AddToDashboardModal';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useCollaboration } from '../../context/CollaborationContext';
 import { CollaborationApiClient } from '../../services/collaborationApi';
 
@@ -92,6 +93,7 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
   const [isInsightsOpen, setIsInsightsOpen] = useState(false);
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [dashboardToDelete, setDashboardToDelete] = useState<{ id: string; name: string } | null>(null);
 
   // Inline editing
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -344,15 +346,23 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
     }
   };
 
-  // Delete Dashboard
+  // Delete Dashboard (Opens reusable DataPilot ConfirmDialog)
   const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this dashboard?')) {
-      DashboardService.deleteDashboard(id);
-      setDashboards(DashboardService.getDashboards());
-      if (currentDashboardId === id) {
-        setCurrentDashboardId(null);
-      }
+    const target = dashboards.find(d => d.id === id);
+    setDashboardToDelete({
+      id,
+      name: target?.name || 'this dashboard'
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    if (!dashboardToDelete) return;
+    DashboardService.deleteDashboard(dashboardToDelete.id);
+    setDashboards(DashboardService.getDashboards());
+    if (currentDashboardId === dashboardToDelete.id) {
+      setCurrentDashboardId(null);
     }
+    setDashboardToDelete(null);
   };
 
   // Save Inline Title
@@ -706,6 +716,24 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
             setCurrentDashboardId(created.id);
           }}
           isConnected={isConnected}
+        />
+
+        {/* Delete Dashboard Confirmation Dialog */}
+        <ConfirmDialog
+          isOpen={Boolean(dashboardToDelete)}
+          title="Delete Dashboard"
+          message={
+            dashboardToDelete?.name && dashboardToDelete.name !== 'this dashboard'
+              ? `Are you sure you want to delete '${dashboardToDelete.name}'?`
+              : 'Are you sure you want to delete this dashboard?'
+          }
+          itemName={dashboardToDelete?.name}
+          itemDetails="This will permanently delete this dashboard and all of its configured widgets and filters."
+          confirmText="Delete Dashboard"
+          cancelText="Cancel"
+          confirmVariant="danger"
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setDashboardToDelete(null)}
         />
       </>
     );
@@ -1124,6 +1152,24 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
         insights={insights}
         isLoading={isLoadingInsights}
         onRefresh={handleGenerateInsights}
+      />
+
+      {/* Delete Dashboard Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={Boolean(dashboardToDelete)}
+        title="Delete Dashboard"
+        message={
+          dashboardToDelete?.name && dashboardToDelete.name !== 'this dashboard'
+            ? `Are you sure you want to delete '${dashboardToDelete.name}'?`
+            : 'Are you sure you want to delete this dashboard?'
+        }
+        itemName={dashboardToDelete?.name}
+        itemDetails="This will permanently delete this dashboard and all of its configured widgets and filters."
+        confirmText="Delete Dashboard"
+        cancelText="Cancel"
+        confirmVariant="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDashboardToDelete(null)}
       />
     </div>
   );
