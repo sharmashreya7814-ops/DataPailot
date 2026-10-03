@@ -720,5 +720,53 @@ export function runDashboardAndFilterTests(): { name: string; passed: boolean; e
     assert('PHASE-12-DASH-PROMPT: Error in dashboard duplicate prompt regression tests', false, err.message);
   }
 
+  // --- PHASE 13: DASHBOARD EMPTY STATE DESIGN & CONTENT HIERARCHY ---
+  try {
+    const listSourcePath = path.join(process.cwd(), 'src', 'components', 'Dashboard', 'DashboardList.tsx');
+    const listSource = fs.readFileSync(listSourcePath, 'utf8');
+
+    const illustrationPath = path.join(process.cwd(), 'src', 'components', 'Dashboard', 'DashboardEmptyIllustration.tsx');
+    const illustrationExists = fs.existsSync(illustrationPath);
+
+    // Test 1: Illustration component exists and is imported
+    assert(
+      'DASH-EMPTY-1: DashboardEmptyIllustration exists and is imported in DashboardList',
+      illustrationExists && listSource.includes('DashboardEmptyIllustration')
+    );
+
+    // Test 2: Updated Heading
+    assert(
+      'DASH-EMPTY-2: Heading displays "No dashboards yet"',
+      listSource.includes('No dashboards yet')
+    );
+
+    // Test 3: Updated Subtitle
+    assert(
+      'DASH-EMPTY-3: Subtitle displays "Build your first analytics dashboard from your connected data."',
+      listSource.includes('Build your first analytics dashboard from your connected data.')
+    );
+
+    // Test 4: Primary and secondary actions
+    assert(
+      'DASH-EMPTY-4: Primary action is "Create Dashboard" and secondary is "Browse Templates"',
+      listSource.includes('Create Dashboard') && listSource.includes('Browse Templates')
+    );
+
+    // Test 5: Subtle AI Option and supporting text
+    assert(
+      'DASH-EMPTY-5: Subtle AI option "✦ Build with AI" and supporting copy present',
+      listSource.includes('✦ Build with AI') &&
+      listSource.includes('Let AI create a dashboard from your database schema.')
+    );
+
+    // Test 6: Capability hint
+    assert(
+      'DASH-EMPTY-6: Capability hint displays "Charts • KPIs • Filters • Tables"',
+      listSource.includes('Charts • KPIs • Filters • Tables')
+    );
+  } catch (err: any) {
+    assert('PHASE-13-DASH-EMPTY: Error in dashboard empty state regression tests', false, err.message);
+  }
+
   return results;
 }

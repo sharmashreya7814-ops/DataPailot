@@ -16,6 +16,7 @@ import {
   Grid
 } from 'lucide-react';
 import { Dashboard } from '../../types/dashboard';
+import { DashboardEmptyIllustration } from './DashboardEmptyIllustration';
 
 interface DashboardListProps {
   dashboards: Dashboard[];
@@ -136,31 +137,66 @@ export const DashboardList: React.FC<DashboardListProps> = ({
 
         {/* Dashboard Grid or Empty State */}
         {dashboards.length === 0 ? (
-          <div className="border border-dashed border-slate-800 rounded-2xl p-12 text-center flex flex-col items-center justify-center space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400">
-              <LayoutDashboard className="w-7 h-7" />
+          <div className="relative overflow-hidden border border-slate-800/80 bg-slate-900/40 backdrop-blur-xs rounded-2xl p-8 sm:p-10 text-center flex flex-col items-center justify-center space-y-5 shadow-2xl shadow-black/40">
+            {/* Subtle background glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Empty State Illustration */}
+            <div className="relative z-10 flex items-center justify-center">
+              <DashboardEmptyIllustration className="w-full max-w-[340px] sm:max-w-[380px] h-auto drop-shadow-md" />
             </div>
-            <div>
-              <h3 className="text-base font-semibold text-slate-200">No Dashboards Yet</h3>
-              <p className="text-xs text-slate-400 max-w-sm mt-1">
-                Start by creating an empty dashboard, launch with a verified starter template, or ask AI to design one from your schema.
+
+            {/* Content Hierarchy */}
+            <div className="relative z-10 space-y-1.5 max-w-md">
+              <h3 className="text-lg font-bold text-white tracking-tight">
+                No dashboards yet
+              </h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Build your first analytics dashboard from your connected data.
               </p>
             </div>
-            <div className="flex items-center space-x-3 pt-2">
+
+            {/* Primary & Secondary Action Buttons */}
+            <div className="relative z-10 flex flex-wrap items-center justify-center gap-3 pt-1">
               <button
                 type="button"
                 onClick={onCreateNew}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-medium transition-colors"
+                className="flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-emerald-950 transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
-                Create Blank Dashboard
+                <Plus className="w-4 h-4" />
+                <span>Create Dashboard</span>
               </button>
+
               <button
                 type="button"
                 onClick={onOpenTemplates}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium transition-colors"
+                className="flex items-center space-x-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-medium border border-slate-700/80 transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
-                Browse Templates
+                <Grid className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Browse Templates</span>
               </button>
+            </div>
+
+            {/* Subtle AI Option */}
+            <div className="relative z-10 flex flex-col items-center space-y-1 pt-1">
+              <button
+                type="button"
+                onClick={onOpenAiBuilder}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-purple-300 hover:text-purple-200 bg-purple-950/30 hover:bg-purple-900/40 border border-purple-800/40 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                <span>✦ Build with AI</span>
+              </button>
+              <p className="text-[11px] text-slate-500">
+                Let AI create a dashboard from your database schema.
+              </p>
+            </div>
+
+            {/* Capability Hint */}
+            <div className="relative z-10 pt-3 border-t border-slate-800/60 w-full max-w-xs">
+              <span className="text-[11px] font-mono tracking-wider text-slate-400">
+                Charts • KPIs • Filters • Tables
+              </span>
             </div>
           </div>
         ) : filtered.length === 0 ? (
