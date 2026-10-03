@@ -53,6 +53,7 @@ import { DashboardAiBuilderModal } from './DashboardAiBuilderModal';
 import { DashboardInsightsDrawer } from './DashboardInsightsDrawer';
 import { AddToDashboardModal } from './AddToDashboardModal';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { PromptDialog } from '../common/PromptDialog';
 import { useCollaboration } from '../../context/CollaborationContext';
 import { CollaborationApiClient } from '../../services/collaborationApi';
 
@@ -94,6 +95,8 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [dashboardToDelete, setDashboardToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [dashboardToDuplicate, setDashboardToDuplicate] = useState<{ id: string; name: string } | null>(null);
+  const [dashboardToRename, setDashboardToRename] = useState<{ id: string; name: string } | null>(null);
 
   // Inline editing
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -337,13 +340,37 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
     setCurrentDashboardId(created.id);
   };
 
-  // Duplicate Dashboard
+  // Duplicate Dashboard (Opens reusable DataPilot PromptDialog)
   const handleDuplicate = (id: string) => {
-    const dup = DashboardService.duplicateDashboard(id);
+    const target = dashboards.find(d => d.id === id);
+    if (target) {
+      setDashboardToDuplicate({
+        id: target.id,
+        name: target.name
+      });
+    }
+  };
+
+  const handleConfirmDuplicate = (enteredName: string) => {
+    if (!dashboardToDuplicate) return;
+    const dup = DashboardService.duplicateDashboard(dashboardToDuplicate.id, enteredName);
     if (dup) {
       setDashboards(DashboardService.getDashboards());
       setCurrentDashboardId(dup.id);
     }
+    setDashboardToDuplicate(null);
+  };
+
+  // Rename Dashboard (Opens reusable DataPilot PromptDialog)
+  const handleRenameRequest = (id: string, currentName: string) => {
+    setDashboardToRename({ id, name: currentName });
+  };
+
+  const handleConfirmRename = (newName: string) => {
+    if (!dashboardToRename) return;
+    DashboardService.renameDashboard(dashboardToRename.id, newName);
+    setDashboards(DashboardService.getDashboards());
+    setDashboardToRename(null);
   };
 
   // Delete Dashboard (Opens reusable DataPilot ConfirmDialog)
@@ -686,13 +713,7 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
           onOpenAiBuilder={() => setIsAiBuilderOpen(true)}
           onDuplicate={handleDuplicate}
           onDelete={handleDelete}
-          onRename={(id, name) => {
-            const next = prompt('Enter new dashboard name:', name);
-            if (next && next.trim()) {
-              DashboardService.renameDashboard(id, next.trim());
-              setDashboards(DashboardService.getDashboards());
-            }
-          }}
+          onRename={handleRenameRequest}
         />
 
         {/* Starter Templates Modal */}
@@ -716,6 +737,36 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
             setCurrentDashboardId(created.id);
           }}
           isConnected={isConnected}
+        />
+
+        {/* Duplicate Dashboard Custom Modal */}
+        <PromptDialog
+          isOpen={Boolean(dashboardToDuplicate)}
+          title="Duplicate Dashboard"
+          message="Enter a name for the duplicated dashboard."
+          initialValue={dashboardToDuplicate ? `${dashboardToDuplicate.name} (Copy)` : ''}
+          placeholder="Enter dashboard name..."
+          confirmText="Duplicate Dashboard"
+          cancelText="Cancel"
+          confirmVariant="primary"
+          icon={<Copy className="w-4 h-4" />}
+          onConfirm={handleConfirmDuplicate}
+          onCancel={() => setDashboardToDuplicate(null)}
+        />
+
+        {/* Rename Dashboard Custom Modal */}
+        <PromptDialog
+          isOpen={Boolean(dashboardToRename)}
+          title="Rename Dashboard"
+          message="Enter a new name for this dashboard."
+          initialValue={dashboardToRename?.name || ''}
+          placeholder="Enter new dashboard name..."
+          confirmText="Rename Dashboard"
+          cancelText="Cancel"
+          confirmVariant="primary"
+          icon={<Edit3 className="w-4 h-4" />}
+          onConfirm={handleConfirmRename}
+          onCancel={() => setDashboardToRename(null)}
         />
 
         {/* Delete Dashboard Confirmation Dialog */}
@@ -1170,6 +1221,36 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
         confirmVariant="danger"
         onConfirm={handleConfirmDelete}
         onCancel={() => setDashboardToDelete(null)}
+      />
+
+      {/* Duplicate Dashboard Custom Modal */}
+      <PromptDialog
+        isOpen={Boolean(dashboardToDuplicate)}
+        title="Duplicate Dashboard"
+        message="Enter a name for the duplicated dashboard."
+        initialValue={dashboardToDuplicate ? `${dashboardToDuplicate.name} (Copy)` : ''}
+        placeholder="Enter dashboard name..."
+        confirmText="Duplicate Dashboard"
+        cancelText="Cancel"
+        confirmVariant="primary"
+        icon={<Copy className="w-4 h-4" />}
+        onConfirm={handleConfirmDuplicate}
+        onCancel={() => setDashboardToDuplicate(null)}
+      />
+
+      {/* Rename Dashboard Custom Modal */}
+      <PromptDialog
+        isOpen={Boolean(dashboardToRename)}
+        title="Rename Dashboard"
+        message="Enter a new name for this dashboard."
+        initialValue={dashboardToRename?.name || ''}
+        placeholder="Enter new dashboard name..."
+        confirmText="Rename Dashboard"
+        cancelText="Cancel"
+        confirmVariant="primary"
+        icon={<Edit3 className="w-4 h-4" />}
+        onConfirm={handleConfirmRename}
+        onCancel={() => setDashboardToRename(null)}
       />
     </div>
   );

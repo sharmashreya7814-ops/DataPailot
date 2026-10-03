@@ -615,5 +615,110 @@ export function runDashboardAndFilterTests(): { name: string; passed: boolean; e
     assert('PHASE-11-DASH-CONFIRM: Error in dashboard confirm dialog regression tests', false, err.message);
   }
 
+  // --- PHASE 12: DASHBOARD DUPLICATE & PROMPT DIALOG CONSISTENCY ---
+  try {
+    const workspaceSourcePath = path.join(process.cwd(), 'src', 'components', 'Dashboard', 'DashboardWorkspace.tsx');
+    const workspaceSource = fs.readFileSync(workspaceSourcePath, 'utf8');
+
+    // Test 1: Verify no native window.prompt() or prompt() calls remain in DashboardWorkspace
+    const hasNativePrompt = /(?<!\w)prompt\s*\(/.test(workspaceSource) || /window\.prompt\s*\(/.test(workspaceSource);
+    assert(
+      'DASH-PROMPT-1: No native window.prompt() or prompt() remains in DashboardWorkspace',
+      !hasNativePrompt,
+      'Found native prompt() in DashboardWorkspace.tsx'
+    );
+
+    // Test 2: Verify PromptDialog is imported in DashboardWorkspace
+    const hasPromptDialogImport = workspaceSource.includes("import { PromptDialog } from '../common/PromptDialog'") ||
+      workspaceSource.includes('import { PromptDialog }');
+    assert(
+      'DASH-PROMPT-2: PromptDialog is imported in DashboardWorkspace',
+      hasPromptDialogImport
+    );
+
+    // Test 3: Verify PromptDialog configuration has title="Duplicate Dashboard" and confirmText="Duplicate Dashboard"
+    const hasDuplicateTitle = workspaceSource.includes('title="Duplicate Dashboard"');
+    const hasDuplicateConfirmText = workspaceSource.includes('confirmText="Duplicate Dashboard"');
+    const hasDuplicateMessage = workspaceSource.includes('message="Enter a name for the duplicated dashboard."');
+    assert(
+      'DASH-PROMPT-3: PromptDialog is configured with title="Duplicate Dashboard", correct message, and confirmText="Duplicate Dashboard"',
+      hasDuplicateTitle && hasDuplicateConfirmText && hasDuplicateMessage
+    );
+
+    // Test 4: Default copy name formatting logic
+    const testOriginId = `dash-dup-source-${Date.now()}`;
+    const testOriginDash: Dashboard = {
+      id: testOriginId,
+      name: 'Executive Revenue Summary',
+      widgets: [
+        {
+          id: 'w_1',
+          title: 'Total Revenue',
+          chartType: 'kpi',
+          queryRef: {
+            type: 'raw_sql',
+            sql: 'SELECT 1000;',
+            sourceTable: 'sales',
+            referencedColumns: []
+          },
+          chartConfig: {
+            chartType: 'kpi',
+            xAxis: '',
+            yAxis: '',
+            secondaryMeasures: [],
+            aggregation: 'none',
+            sortOrder: 'none',
+            sortBy: 'x',
+            limit: 'all',
+            title: 'Total Revenue',
+            showLegend: false,
+            showDataLabels: false,
+            showGrid: false,
+            binCount: 10,
+            treatNullAsZero: true
+          },
+          size: { colSpan: 6 },
+          position: { order: 0 }
+        }
+      ],
+      filters: [],
+      layout: { columns: 12, gap: 'md', theme: 'dark' },
+      autoRefreshInterval: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    DashboardService.saveDashboard(testOriginDash);
+
+    // Test 5: Duplicating with default copy name
+    const defaultDup = DashboardService.duplicateDashboard(testOriginId);
+    assert(
+      'DASH-PROMPT-4: Duplicating without custom name generates "Original Name (Copy)"',
+      defaultDup !== null && defaultDup.name === 'Executive Revenue Summary (Copy)'
+    );
+
+    // Test 6: Duplicating with custom user-entered name
+    const customDup = DashboardService.duplicateDashboard(testOriginId, 'Q4 Regional Revenue Review');
+    assert(
+      'DASH-PROMPT-5: Duplicating with user-entered custom name sets custom name properly',
+      customDup !== null && customDup.name === 'Q4 Regional Revenue Review'
+    );
+
+    // Test 7: Duplicating deep clones widgets with fresh IDs
+    assert(
+      'DASH-PROMPT-6: Duplicating clones widgets with new distinct widget IDs',
+      customDup !== null &&
+      customDup.widgets.length === 1 &&
+      customDup.widgets[0].id !== 'w_1' &&
+      customDup.widgets[0].title === 'Total Revenue'
+    );
+
+    // Clean up test dashboards
+    DashboardService.deleteDashboard(testOriginId);
+    if (defaultDup) DashboardService.deleteDashboard(defaultDup.id);
+    if (customDup) DashboardService.deleteDashboard(customDup.id);
+  } catch (err: any) {
+    assert('PHASE-12-DASH-PROMPT: Error in dashboard duplicate prompt regression tests', false, err.message);
+  }
+
   return results;
 }

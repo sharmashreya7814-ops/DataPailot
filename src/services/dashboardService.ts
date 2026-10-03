@@ -148,15 +148,16 @@ export class DashboardService {
   /**
    * Duplicates an existing dashboard
    */
-  public static duplicateDashboard(id: string): Dashboard | null {
+  public static duplicateDashboard(id: string, newName?: string): Dashboard | null {
     const original = this.getDashboardById(id);
     if (!original) return null;
 
     const now = new Date().toISOString();
+    const finalName = newName && newName.trim() ? newName.trim() : `${original.name} (Copy)`;
     const duplicated: Dashboard = {
       ...original,
       id: `dash-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      name: `${original.name} (Copy)`,
+      name: finalName,
       createdAt: now,
       updatedAt: now,
       // Deep clone widgets with new IDs
