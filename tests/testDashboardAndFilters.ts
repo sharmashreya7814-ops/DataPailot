@@ -4,7 +4,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { DashboardFilterEngine } from '../src/services/dashboardFilterEngine';
 import { DashboardService } from '../src/services/dashboardService';
 import { DashboardFilter, DashboardWidget, Dashboard } from '../src/types/dashboard';
-import { QueryResultColumn } from '../src/types/database';
+import { QueryResultColumn, DiscoveredTable } from '../src/types/database';
+import { DashboardTemplateService } from '../src/services/dashboardTemplateService';
 import { VisualizationExportService } from '../src/services/visualizationExportService';
 import { VisualizationDataProcessor } from '../src/services/visualizationDataProcessor';
 import { ChartRecommender } from '../src/services/chartRecommender';
@@ -766,6 +767,95 @@ export function runDashboardAndFilterTests(): { name: string; passed: boolean; e
     );
   } catch (err: any) {
     assert('PHASE-13-DASH-EMPTY: Error in dashboard empty state regression tests', false, err.message);
+  }
+
+  // --- PHASE 14: DASHBOARD STARTER TEMPLATES END-TO-END FLOW ---
+  try {
+    const templatesModalPath = path.join(process.cwd(), 'src', 'components', 'Dashboard', 'DashboardTemplatesModal.tsx');
+    const templatesModalSource = fs.readFileSync(templatesModalPath, 'utf8');
+
+    const workspaceSourcePath = path.join(process.cwd(), 'src', 'components', 'Dashboard', 'DashboardWorkspace.tsx');
+    const workspaceSource = fs.readFileSync(workspaceSourcePath, 'utf8');
+
+    // Test 1: Loading state appears in DashboardTemplatesModal ("Applying Template...")
+    assert(
+      'DASH-TMPL-1: DashboardTemplatesModal displays loading state "Applying Template..."',
+      templatesModalSource.includes('Applying Template...') && templatesModalSource.includes('Loader2')
+    );
+
+    // Test 2: Duplicate clicks are prevented while applying
+    assert(
+      'DASH-TMPL-2: Duplicate template clicks are prevented while applying',
+      templatesModalSource.includes('isAnyApplying') && templatesModalSource.includes('disabled={isAnyApplying}')
+    );
+
+    // Test 3: Errors are surfaced to the user with AlertCircle
+    assert(
+      'DASH-TMPL-3: Errors are surfaced in UI via AlertCircle banner',
+      templatesModalSource.includes('errorMessage') && templatesModalSource.includes('AlertCircle')
+    );
+
+    // Test 4: DashboardWorkspace persists template dashboard and updates currentDashboardId
+    assert(
+      'DASH-TMPL-4: DashboardWorkspace persists template dashboard and sets active dashboard',
+      workspaceSource.includes('handleSelectTemplate') &&
+      workspaceSource.includes('DashboardService.saveDashboard(created)') &&
+      workspaceSource.includes('setCurrentDashboardId(saved.id)')
+    );
+
+    // Test 5: Template instantiation creates and persists dashboard in storage
+    const testDiscoveredTables: DiscoveredTable[] = [
+      {
+        name: 'orders',
+        schema: 'public',
+        type: 'table',
+        approximateRowCount: 100
+      }
+    ];
+
+    const templateDashboard = DashboardTemplateService.instantiateTemplate('sales', testDiscoveredTables);
+    assert(
+      'DASH-TMPL-5: DashboardTemplateService.instantiateTemplate returns valid dashboard with ID',
+      templateDashboard !== null && Boolean(templateDashboard.id) && templateDashboard.name.includes('Sales')
+    );
+
+    // Test 6: Template dashboard is persisted in DashboardService storage
+    const retrievedFromStorage = DashboardService.getDashboardById(templateDashboard.id);
+    assert(
+      'DASH-TMPL-6: Template dashboard is persisted in storage and retrievable by ID',
+      retrievedFromStorage !== null && retrievedFromStorage.id === templateDashboard.id
+    );
+
+    // Test 7: Template widgets are persisted with configuration
+    assert(
+      'DASH-TMPL-7: Template widgets are created and persisted with chartConfig',
+      retrievedFromStorage !== null &&
+      retrievedFromStorage.widgets.length > 0 &&
+      Boolean(retrievedFromStorage.widgets[0].chartConfig)
+    );
+
+    // Test 8: Schema mapping / missing table detection does not silently fail
+    const unmappedDashboard = DashboardTemplateService.instantiateTemplate('operations', []);
+    const unmappedWidget = unmappedDashboard.widgets.find(w => w.status === 'schema_changed');
+    assert(
+      'DASH-TMPL-8: Incompatible or unmapped schema surfaces schema_changed status with details',
+      unmappedWidget !== undefined && Boolean(unmappedWidget.schemaChangeDetails?.description)
+    );
+
+    // Test 9: Blank dashboard creation remains unchanged and functional
+    const blankDash = DashboardService.createDashboard('Blank Dashboard Test');
+    const retrievedBlank = DashboardService.getDashboardById(blankDash.id);
+    assert(
+      'DASH-TMPL-9: Blank dashboard creation flow remains functional and persisted',
+      retrievedBlank !== null && retrievedBlank.name === 'Blank Dashboard Test'
+    );
+
+    // Clean up test dashboards
+    DashboardService.deleteDashboard(templateDashboard.id);
+    DashboardService.deleteDashboard(unmappedDashboard.id);
+    DashboardService.deleteDashboard(blankDash.id);
+  } catch (err: any) {
+    assert('PHASE-14-DASH-TMPL: Error in dashboard starter templates regression tests', false, err.message);
   }
 
   return results;

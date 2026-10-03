@@ -340,6 +340,17 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
     setCurrentDashboardId(created.id);
   };
 
+  // Select / Apply Starter Template
+  const handleSelectTemplate = (created: Dashboard) => {
+    const saved = DashboardService.saveDashboard(created);
+    setDashboards(DashboardService.getDashboards());
+    setCurrentDashboardId(saved.id);
+    setIsTemplatesOpen(false);
+    setTimeout(() => {
+      handleRefreshAll(saved);
+    }, 50);
+  };
+
   // Duplicate Dashboard (Opens reusable DataPilot PromptDialog)
   const handleDuplicate = (id: string) => {
     const target = dashboards.find(d => d.id === id);
@@ -721,10 +732,7 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
           isOpen={isTemplatesOpen}
           onClose={() => setIsTemplatesOpen(false)}
           discoveredTables={discoveredTables}
-          onSelectTemplate={created => {
-            setDashboards(DashboardService.getDashboards());
-            setCurrentDashboardId(created.id);
-          }}
+          onSelectTemplate={handleSelectTemplate}
         />
 
         {/* AI Builder Modal */}
@@ -1178,10 +1186,7 @@ export const DashboardWorkspace: React.FC<DashboardWorkspaceProps> = ({
         isOpen={isTemplatesOpen}
         onClose={() => setIsTemplatesOpen(false)}
         discoveredTables={discoveredTables}
-        onSelectTemplate={created => {
-          setDashboards(DashboardService.getDashboards());
-          setCurrentDashboardId(created.id);
-        }}
+        onSelectTemplate={handleSelectTemplate}
       />
 
       {/* AI Builder Modal */}

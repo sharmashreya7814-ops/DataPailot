@@ -1,5 +1,6 @@
 import { Dashboard, DashboardWidget } from '../types/dashboard';
 import { DiscoveredTable } from '../types/database';
+import { DashboardService } from './dashboardService';
 
 export interface TemplateDefinition {
   id: 'sales' | 'customer' | 'product' | 'operations';
@@ -259,7 +260,7 @@ export class DashboardTemplateService {
       };
     });
 
-    return {
+    const created: Dashboard = {
       id: `dash-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       name: template.name,
       description: template.description,
@@ -275,5 +276,7 @@ export class DashboardTemplateService {
       permissions: { role: 'owner' },
       autoRefreshInterval: 0
     };
+
+    return DashboardService.saveDashboard(created);
   }
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   TrendingUp,
   Users,
@@ -8,9 +8,12 @@ import {
   Sparkles,
   ArrowRight,
   Database,
-  Check
+  Check,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { DASHBOARD_TEMPLATES, TemplateDefinition, DashboardTemplateService } from '../../services/dashboardTemplateService';
+import { DashboardService } from '../../services/dashboardService';
 import { DiscoveredTable } from '../../types/database';
 import { Dashboard } from '../../types/dashboard';
 
@@ -27,6 +30,9 @@ export const DashboardTemplatesModal: React.FC<DashboardTemplatesModalProps> = (
   discoveredTables,
   onSelectTemplate
 }) => {
+  const [applyingTemplateId, setApplyingTemplateId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   if (!isOpen) return null;
 
   const getIcon = (icon: string) => {
@@ -44,13 +50,31 @@ export const DashboardTemplatesModal: React.FC<DashboardTemplatesModalProps> = (
     }
   };
 
-  const handleApply = (template: TemplateDefinition) => {
-    const dashboard = DashboardTemplateService.instantiateTemplate(
-      template.id,
-      discoveredTables
-    );
-    onSelectTemplate(dashboard);
-    onClose();
+  const handleApply = async (template: TemplateDefinition) => {
+    if (applyingTemplateId) return; // Prevent duplicate clicks
+    setErrorMessage(null);
+    setApplyingTemplateId(template.id);
+
+    try {
+      const dashboard = DashboardTemplateService.instantiateTemplate(
+        template.id,
+        discoveredTables
+      );
+
+      if (!dashboard || !dashboard.id) {
+        throw new Error(`Failed to generate dashboard configuration for ${template.name}.`);
+      }
+
+      // Persist the dashboard using the existing DashboardService
+      const saved = DashboardService.saveDashboard(dashboard);
+      onSelectTemplate(saved);
+      onClose();
+    } catch (err: any) {
+      console.error('Failed to apply starter template:', err);
+      setErrorMessage(err?.message || 'Failed to apply template. Please try again.');
+    } finally {
+      setApplyingTemplateId(null);
+    }
   };
 
   return (
@@ -77,6 +101,14 @@ export const DashboardTemplatesModal: React.FC<DashboardTemplatesModalProps> = (
           </button>
         </div>
 
+        {/* Error Alert Banner */}
+        {errorMessage && (
+          <div className="mx-6 mt-4 p-3 bg-rose-950/40 border border-rose-800/60 rounded-xl text-xs text-rose-300 flex items-center space-x-2 animate-in fade-in duration-100">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
+            <span className="flex-1">{errorMessage}</span>
+          </div>
+        )}
+
         {/* Templates Grid */}
         <div className="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4">
           {DASHBOARD_TEMPLATES.map(tmpl => {
@@ -85,6 +117,9 @@ export const DashboardTemplatesModal: React.FC<DashboardTemplatesModalProps> = (
             const matchingTables = discoveredTables.filter(t =>
               matchedKeywords.some(kw => t.name.toLowerCase().includes(kw))
             );
+
+            const isThisApplying = applyingTemplateId === tmpl.id;
+            const isAnyApplying = Boolean(applyingTemplateId);
 
             return (
               <div
@@ -142,10 +177,26 @@ export const DashboardTemplatesModal: React.FC<DashboardTemplatesModalProps> = (
                   <button
                     type="button"
                     onClick={() => handleApply(tmpl)}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white transition-colors shadow-lg shadow-indigo-950"
+                    disabled={isAnyApplying}
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-colors shadow-lg shadow-indigo-950 ${
+                      isThisApplying
+                        ? 'bg-indigo-700 cursor-wait'
+                        : isAnyApplying
+                        ? 'bg-indigo-600/40 text-slate-400 cursor-not-allowed'
+                        : 'bg-indigo-600 hover:bg-indigo-500'
+                    }`}
                   >
-                    <span>Use Template</span>
-                    <ArrowRight className="w-3 h-3" />
+                    {isThisApplying ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Applying Template...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Use Template</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
